@@ -143,7 +143,7 @@ void hitobject_t::draw_fg(SongTime_t ms) const
         case HitObjectType::Slider: {
             glColor4f(1.0f, 1.0f, 1.0f, o);
             glm::vec2 size = glm::vec2(beatmapengine::circleradius() * 2.0f);
-            size *= glm::mix(3.5f, 1.0f, approach(start, ms));
+            size *= glm::mix(4.0f, 1.0f, approach(start, ms));
             if (beatmapengine::hitobjects_inverted)
                 textures::approachcircle->draw(invert_vec(pos), size * 0.5f, size);
             else
