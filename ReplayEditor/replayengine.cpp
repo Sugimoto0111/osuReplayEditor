@@ -329,7 +329,7 @@ void Replay::draw(SongTime_t ms)
         pos = glm::mix(f->p, g->p, t);
     }
     const glm::vec2 origin(16.0f, 16.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
     textures::cursor->draw(pos, origin);
 }
 
