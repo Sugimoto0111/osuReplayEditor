@@ -16,6 +16,7 @@ namespace osuReplayEditor
         private int editorWindowDurationMs = 2000;
         private Timer FrameTimer = new Timer();
         private Timer ScrollBarTimer = new Timer();
+        private Timer AccuracyRefreshTimer = new Timer();
         private MetadataEditor.MetadataEditorForm MetadataEditorForm;
         private ConfigEditor.ConfigEditorForm ConfigEditorForm;
         private bool scrubRight = false;
@@ -36,7 +37,9 @@ namespace osuReplayEditor
         private float originalCS = 0.0f;
         private JudgementTimelineControl judgementTimelineControl;
         private HitErrorBarControl hitErrorBarControl;
-        private Button traceAccBtn;
+        private bool replayLoaded = false;
+        private bool accuracyRefreshPending = false;
+        private bool accuracyAnalysisInProgress = false;
         private const int TimelineKey1Mask = 5;
         private const int TimelineKey2Mask = 10;
         private const int EditorWindowMinMs = 400;
@@ -61,14 +64,16 @@ namespace osuReplayEditor
             this.Controls.Add(this.judgementTimelineControl);
             this.hitErrorBarControl = new HitErrorBarControl();
             this.Controls.Add(this.hitErrorBarControl);
-            this.traceAccBtn = new Button
-            {
-                Name = "traceAccBtn",
-                Text = "Trace Acc",
-                UseVisualStyleBackColor = true
-            };
-            this.traceAccBtn.Click += analyzeAccTraceToolStripMenuItem_Click;
-            this.Controls.Add(this.traceAccBtn);
+            this.AccuracyRefreshTimer.Interval = 125;
+            this.AccuracyRefreshTimer.Tick += AccuracyRefreshTimer_Tick;
+            this.analyzeAccBtn.Visible = false;
+            this.analyzeAccBtn.Enabled = false;
+            this.analyzeAccBtn.TabStop = false;
+            this.nextObjectBtn.Visible = false;
+            this.nextObjectBtn.Enabled = false;
+            this.nextObjectBtn.TabStop = false;
+            this.analyzeAccTraceToolStripMenuItem.Visible = false;
+            this.label11.Text = "UR:";
             HideLegacyBottomControls();
             ApplyExpandedTimelineLayout();
             ModernTheme.Apply(this);
@@ -126,7 +131,8 @@ namespace osuReplayEditor
 
             this.volumeBar.SetBounds(Math.Max(0, this.ClientSize.Width - 54), 54, 45, Math.Max(160, bottomTimelineTop - 66));
 
-            int analysisLeft = Math.Max(contentLeft + 520, this.volumeBar.Left - 260);
+            int analysisWidth = 185;
+            int analysisLeft = Math.Max(contentLeft + 520, this.volumeBar.Left - analysisWidth);
             int contentRight = Math.Max(contentLeft + 420, analysisLeft - 12);
             int contentWidth = contentRight - contentLeft;
 
@@ -160,7 +166,7 @@ namespace osuReplayEditor
             this.timelineControl.ViewDurationMs = editorWindowDurationMs;
 
             AnchorBottomRight(
-                analyzeAccBtn, traceAccBtn, nextObjectBtn, nextMissBtn, next50btn, next100btn,
+                nextMissBtn, next50btn, next100btn,
                 label4, label5, label6, label7, label8, label9, label10, label11,
                 acc_300s_tb, acc_100s_tb, acc_50s_tb, acc_misses_tb, acc_acc_tb,
                 acc_avg_early_tb, acc_avg_late_tb, acc_ur_tb,
@@ -168,39 +174,42 @@ namespace osuReplayEditor
                 label15, hitObjectErrorLabel, label17, hitObjectPointsLabel);
 
             int analysisTop = canvasTop;
-            this.analyzeAccBtn.SetBounds(analysisLeft, analysisTop, 88, 24);
-            this.traceAccBtn.SetBounds(analysisLeft + 94, analysisTop, 84, 24);
-            this.nextObjectBtn.SetBounds(analysisLeft + 184, analysisTop, 64, 24);
-            this.nextMissBtn.SetBounds(analysisLeft, analysisTop + 31, 75, 24);
-            this.next50btn.SetBounds(analysisLeft + 81, analysisTop + 31, 75, 24);
-            this.next100btn.SetBounds(analysisLeft, analysisTop + 62, 75, 24);
-
-            int statsTop = analysisTop + 96;
+            int statsTop = analysisTop;
             this.label4.Location = new Point(analysisLeft, statsTop);
-            this.acc_300s_tb.Location = new Point(analysisLeft + 50, statsTop);
+            this.acc_300s_tb.Location = new Point(analysisLeft + 44, statsTop);
             this.label5.Location = new Point(analysisLeft, statsTop + 18);
-            this.acc_100s_tb.Location = new Point(analysisLeft + 50, statsTop + 18);
+            this.acc_100s_tb.Location = new Point(analysisLeft + 44, statsTop + 18);
             this.label6.Location = new Point(analysisLeft, statsTop + 36);
-            this.acc_50s_tb.Location = new Point(analysisLeft + 50, statsTop + 36);
+            this.acc_50s_tb.Location = new Point(analysisLeft + 44, statsTop + 36);
             this.label7.Location = new Point(analysisLeft, statsTop + 54);
-            this.acc_misses_tb.Location = new Point(analysisLeft + 50, statsTop + 54);
+            this.acc_misses_tb.Location = new Point(analysisLeft + 44, statsTop + 54);
             this.label8.Location = new Point(analysisLeft, statsTop + 72);
-            this.acc_acc_tb.Location = new Point(analysisLeft + 50, statsTop + 72);
-            this.label17.Location = new Point(analysisLeft, statsTop + 96);
-            this.hitObjectPointsLabel.Location = new Point(analysisLeft + 50, statsTop + 91);
+            this.acc_acc_tb.Location = new Point(analysisLeft + 44, statsTop + 72);
 
-            this.label9.Location = new Point(analysisLeft + 100, statsTop);
-            this.acc_avg_early_tb.Location = new Point(analysisLeft + 162, statsTop);
-            this.label10.Location = new Point(analysisLeft + 100, statsTop + 18);
-            this.acc_avg_late_tb.Location = new Point(analysisLeft + 162, statsTop + 18);
-            this.label11.Location = new Point(analysisLeft + 100, statsTop + 36);
-            this.acc_ur_tb.Location = new Point(analysisLeft + 174, statsTop + 36);
+            this.label9.Location = new Point(analysisLeft + 80, statsTop);
+            this.acc_avg_early_tb.Location = new Point(analysisLeft + 135, statsTop);
+            this.label10.Location = new Point(analysisLeft + 80, statsTop + 18);
+            this.acc_avg_late_tb.Location = new Point(analysisLeft + 135, statsTop + 18);
+            this.label11.Location = new Point(analysisLeft + 80, statsTop + 36);
+            this.acc_ur_tb.Location = new Point(analysisLeft + 105, statsTop + 36);
 
-            this.label14.Location = new Point(analysisLeft + 100, statsTop + 54);
-            this.currentHitObjectIdLabel.Location = new Point(analysisLeft + 100, statsTop + 72);
-            this.currentHitObjectLabel.Location = new Point(analysisLeft + 140, statsTop + 72);
-            this.label15.Location = new Point(analysisLeft + 100, statsTop + 96);
-            this.hitObjectErrorLabel.Location = new Point(analysisLeft + 140, statsTop + 91);
+            this.label14.Location = new Point(analysisLeft, statsTop + 96);
+            this.currentHitObjectIdLabel.Location = new Point(analysisLeft, statsTop + 112);
+            this.currentHitObjectLabel.Location = new Point(analysisLeft + 70, statsTop + 112);
+            this.label15.Location = new Point(analysisLeft, statsTop + 138);
+            this.hitObjectErrorLabel.Location = new Point(analysisLeft, statsTop + 152);
+            this.label17.Location = new Point(analysisLeft, statsTop + 180);
+            this.hitObjectPointsLabel.Location = new Point(analysisLeft, statsTop + 194);
+
+            int buttonGap = 4;
+            int buttonWidth = (analysisWidth - buttonGap * 2) / 3;
+            int navigationTop = bottomTimelineTop - 31;
+            this.nextMissBtn.Text = "Miss";
+            this.next50btn.Text = "50";
+            this.next100btn.Text = "100";
+            this.nextMissBtn.SetBounds(analysisLeft, navigationTop, buttonWidth, 24);
+            this.next50btn.SetBounds(analysisLeft + buttonWidth + buttonGap, navigationTop, buttonWidth, 24);
+            this.next100btn.SetBounds(analysisLeft + (buttonWidth + buttonGap) * 2, navigationTop, buttonWidth, 24);
         }
 
         private void MainForm_Resize(object sender, EventArgs e)
@@ -279,6 +288,7 @@ namespace osuReplayEditor
             }
             UpdateHitErrorBarWindows();
             RefreshTimelineJudgementMarkers();
+            RequestAccuracyRefresh();
         }
 
         private static float DifficultyRange(float value, float low, float mid, float high)
@@ -355,6 +365,7 @@ namespace osuReplayEditor
 
             if (API.LoadReplay(fname))
             {
+                replayLoaded = true;
                 API.Pause();
                 this.songMin = API.GetReplayStartMs();
                 this.songMax = API.GetReplayEndMs();
@@ -381,8 +392,10 @@ namespace osuReplayEditor
                 nextMissBtn.Enabled = false;
                 next50btn.Enabled = false;
                 next100btn.Enabled = false;
+                selectedHitObject = -1;
                 setHitObjectInfoBlank();
                 RefreshTimelineData();
+                RequestAccuracyRefresh();
             }
             else
             {
@@ -628,6 +641,7 @@ namespace osuReplayEditor
             timelineKeyEditActive = false;
             timelineKeyEditMask = 0;
             this.timelineControl.Capture = false;
+            RequestAccuracyRefresh();
         }
 
         private void judgementTimelineControl_MouseDown(object sender, MouseEventArgs e)
@@ -956,6 +970,7 @@ namespace osuReplayEditor
             {
                 RefreshTimelineReplayFrames();
                 RefreshTimelineJudgementMarkers();
+                RequestAccuracyRefresh();
             }
         }
 
@@ -977,6 +992,7 @@ namespace osuReplayEditor
                 RefreshTimelineJudgementMarkers();
                 RefreshHitErrorBarMarkers();
                 RefreshTimelineReplayFrames();
+                RequestAccuracyRefresh();
             }
         }
 
@@ -1005,11 +1021,17 @@ namespace osuReplayEditor
                 {
                     case Keys.Z:
                         if (API.Undo())
+                        {
                             RefreshTimelineData();
+                            RequestAccuracyRefresh();
+                        }
                         break;
                     case Keys.Y:
                         if (API.Redo())
+                        {
                             RefreshTimelineData();
+                            RequestAccuracyRefresh();
+                        }
                         break;
                     case Keys.Left:
                         JumpToAdjacentKeyPress(false);
@@ -1277,6 +1299,7 @@ namespace osuReplayEditor
         private void flipCursorDataBtn_Click(object sender, EventArgs e)
         {
             API.InvertCursorData();
+            RequestAccuracyRefresh();
         }
 
         private void zoomPanResetBtn_Click(object sender, EventArgs e)
@@ -1304,6 +1327,8 @@ namespace osuReplayEditor
         {
             if (UserWantsToExit())
             {
+                this.AccuracyRefreshTimer.Stop();
+                this.AccuracyRefreshTimer.Dispose();
                 API.Cleanup();
             }
             else
@@ -1321,13 +1346,19 @@ namespace osuReplayEditor
         private void undoToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (API.Undo())
+            {
                 RefreshTimelineData();
+                RequestAccuracyRefresh();
+            }
         }
 
         private void redoToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (API.Redo())
+            {
                 RefreshTimelineData();
+                RequestAccuracyRefresh();
+            }
         }
 
         private void keybindReferenceToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1374,6 +1405,42 @@ namespace osuReplayEditor
             RefreshTimelineJudgementMarkers();
             RefreshHitErrorBarMarkers();
             RefreshOverviewSummary();
+        }
+
+        private void RequestAccuracyRefresh()
+        {
+            if (!replayLoaded || this.IsDisposed || this.Disposing)
+                return;
+
+            accuracyRefreshPending = true;
+            this.AccuracyRefreshTimer.Stop();
+            this.AccuracyRefreshTimer.Start();
+        }
+
+        private void AccuracyRefreshTimer_Tick(object sender, EventArgs e)
+        {
+            this.AccuracyRefreshTimer.Stop();
+            if (!accuracyRefreshPending || !replayLoaded || this.IsDisposed || this.Disposing)
+                return;
+
+            if (accuracyAnalysisInProgress)
+            {
+                this.AccuracyRefreshTimer.Start();
+                return;
+            }
+
+            accuracyRefreshPending = false;
+            accuracyAnalysisInProgress = true;
+            try
+            {
+                analyzeAccuracy(false);
+            }
+            finally
+            {
+                accuracyAnalysisInProgress = false;
+                if (accuracyRefreshPending && !this.IsDisposed && !this.Disposing)
+                    this.AccuracyRefreshTimer.Start();
+            }
         }
 
         private void analyzeAccBtn_Click(object sender, EventArgs e)
@@ -1548,12 +1615,14 @@ namespace osuReplayEditor
         {
             API.RelaxRecalculateAllHits();
             RefreshTimelineData();
+            RequestAccuracyRefresh();
         }
 
         private void relaxRecalculateHitsSelectionBtn_Click(object sender, EventArgs e)
         {
             API.RelaxRecalculateHitsInSelection();
             RefreshTimelineData();
+            RequestAccuracyRefresh();
         }
     }
 }
