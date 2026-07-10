@@ -118,10 +118,10 @@ namespace osuReplayEditor
         {
             int contentLeft = 100;
             int margin = 12;
-            int bottomTimelineHeight = 154;
+            int bottomTimelineHeight = 172;
             int bottomTimelineTop = Math.Max(360, this.ClientSize.Height - bottomTimelineHeight - margin);
             int overviewTop = 34;
-            int overviewHeight = 66;
+            int overviewHeight = 70;
             int canvasTop = overviewTop + overviewHeight + 10;
 
             this.volumeBar.SetBounds(Math.Max(0, this.ClientSize.Width - 54), 54, 45, Math.Max(160, bottomTimelineTop - 66));

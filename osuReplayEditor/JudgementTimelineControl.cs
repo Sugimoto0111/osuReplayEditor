@@ -8,6 +8,14 @@ namespace osuReplayEditor
 {
     public class JudgementTimelineControl : Control
     {
+        private const int OverviewHeight = 70;
+        private const int BackgroundInset = 35;
+        private const int RailInset = 60;
+        private const int RailY = 18;
+        private const int MarkerTop = 10;
+        private const int MarkerBottom = 30;
+        private const int PlayheadDiameter = 9;
+
         public struct JudgementMarker
         {
             public int TimeMs;
@@ -53,21 +61,46 @@ namespace osuReplayEditor
         private string summaryText = string.Empty;
         private readonly List<JudgementMarker> judgementMarkers = new List<JudgementMarker>();
 
-        private readonly Brush backgroundBrush = new SolidBrush(Color.FromArgb(16, 16, 18));
-        private readonly Brush missBrush = new SolidBrush(Color.FromArgb(245, 74, 74));
-        private readonly Brush fiftyBrush = new SolidBrush(Color.FromArgb(250, 213, 82));
-        private readonly Brush hundredBrush = new SolidBrush(Color.FromArgb(95, 190, 92));
-        private readonly Brush textBrush = new SolidBrush(Color.FromArgb(225, 228, 235));
-        private readonly Brush playheadBrush = new SolidBrush(Color.WhiteSmoke);
-        private readonly Pen railPen = new Pen(Color.FromArgb(55, 57, 61), 3f);
+        private readonly Brush backgroundBrush = new SolidBrush(Color.FromArgb(23, 23, 23));
+        private readonly Brush textBrush = new SolidBrush(Color.White);
+        private readonly Brush playheadBrush = new SolidBrush(Color.White);
+        private readonly Pen railPen = new Pen(Color.FromArgb(48, 48, 48), 3f);
+        private readonly Pen missPen = new Pen(Color.FromArgb(231, 76, 60), 3f);
+        private readonly Pen fiftyPen = new Pen(Color.FromArgb(241, 196, 15), 3f);
+        private readonly Pen hundredPen = new Pen(Color.FromArgb(106, 176, 76), 3f);
+        private readonly Font summaryFont = new Font("Segoe UI", 12.75f, FontStyle.Regular, GraphicsUnit.Point);
+        private readonly StringFormat summaryFormat = new StringFormat
+        {
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center
+        };
 
         public JudgementTimelineControl() : base()
         {
             this.Value = 0;
             this.TimelineEndMs = 1;
+            this.MinimumSize = new Size(RailInset * 2, OverviewHeight);
             this.DoubleBuffered = true;
             this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             this.Paint += Timeline_Paint;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                backgroundBrush.Dispose();
+                textBrush.Dispose();
+                playheadBrush.Dispose();
+                railPen.Dispose();
+                missPen.Dispose();
+                fiftyPen.Dispose();
+                hundredPen.Dispose();
+                summaryFont.Dispose();
+                summaryFormat.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         public void SetJudgementMarkers(int[] times, int[] kinds, int count)
@@ -89,9 +122,9 @@ namespace osuReplayEditor
 
         public int XToTimeMs(int x)
         {
-            const int pad = 8;
-            int usableWidth = Math.Max(1, Width - pad * 2);
-            double ratio = Math.Max(0.0, Math.Min(1.0, (x - pad) / (double)usableWidth));
+            int left = RailLeft;
+            int usableWidth = RailWidth;
+            double ratio = Math.Max(0.0, Math.Min(1.0, (x - left) / (double)usableWidth));
             return (int)(ratio * timelineEndMs);
         }
 
@@ -101,28 +134,25 @@ namespace osuReplayEditor
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(Parent?.BackColor ?? Color.FromArgb(246, 248, 252));
 
-            Rectangle bounds = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
-            FillRoundedRectangle(g, backgroundBrush, bounds, 8);
+            Rectangle bounds = OverviewBounds;
+            FillRoundedRectangle(g, backgroundBrush, bounds, 12);
 
-            int pad = 8;
-            int usableWidth = Math.Max(1, Width - pad * 2);
-            int railY = Math.Max(14, Height / 3);
-            int markerY = Math.Max(5, railY - 10);
-            int markerHeight = Math.Max(16, Height - markerY - 12);
-
-            g.DrawLine(railPen, pad, railY, Width - pad, railY);
-            DrawJudgementMarkers(g, pad, usableWidth, markerY, markerHeight);
+            int railY = Math.Min(RailY, Math.Max(0, Height - 1));
+            g.DrawLine(railPen, RailLeft, railY, RailRight, railY);
+            DrawJudgementMarkers(g);
             DrawSummary(g);
-            DrawPlayhead(g, pad, usableWidth);
+            DrawPlayhead(g);
         }
 
-        private void DrawJudgementMarkers(Graphics g, int pad, int usableWidth, int markerY, int markerHeight)
+        private void DrawJudgementMarkers(Graphics g)
         {
+            int markerTop = Math.Min(MarkerTop, Math.Max(0, Height - 1));
+            int markerBottom = Math.Min(MarkerBottom, Math.Max(markerTop, Height - 1));
+
             foreach (JudgementMarker marker in judgementMarkers)
             {
-                int x = TimeToX(marker.TimeMs, pad, usableWidth);
-                Brush brush = marker.Kind == 0 ? missBrush : marker.Kind == 50 ? fiftyBrush : hundredBrush;
-                FillRoundedRectangle(g, brush, new Rectangle(x - 2, markerY, 4, markerHeight), 2);
+                int x = TimeToX(marker.TimeMs);
+                g.DrawLine(GetMarkerPen(marker.Kind), x, markerTop, x, markerBottom);
             }
         }
 
@@ -131,36 +161,54 @@ namespace osuReplayEditor
             if (string.IsNullOrWhiteSpace(summaryText))
                 return;
 
-            using (Font summaryFont = new Font(Font.FontFamily, Math.Max(8.5f, Font.SizeInPoints), FontStyle.Bold))
-            {
-                SizeF size = g.MeasureString(summaryText, summaryFont);
-                float x = (Width - size.Width) / 2.0f;
-                float y = Math.Max(Height - size.Height - 6, Height / 2.0f);
-                g.DrawString(summaryText, summaryFont, textBrush, x, y);
-            }
+            float top = Math.Min(38.0f, Math.Max(0.0f, Height - 1.0f));
+            RectangleF summaryRect = new RectangleF(0.0f, top, Width, Math.Max(1.0f, Height - top));
+            g.DrawString(summaryText, summaryFont, textBrush, summaryRect, summaryFormat);
         }
 
-        private void DrawPlayhead(Graphics g, int pad, int usableWidth)
+        private void DrawPlayhead(Graphics g)
         {
-            int x = pad + (int)(Value * usableWidth + 0.5);
-            using (Pen pen = new Pen(Color.WhiteSmoke, 2f))
-            {
-                g.DrawLine(pen, x, 5, x, Height - 3);
-            }
-
-            Point[] triangle =
-            {
-                new Point(x, 5),
-                new Point(x - 5, 0),
-                new Point(x + 5, 0),
-            };
-            g.FillPolygon(playheadBrush, triangle);
+            int railY = Math.Min(RailY, Math.Max(0, Height - 1));
+            int x = RailLeft + (int)(Value * RailWidth + 0.5);
+            int offset = PlayheadDiameter / 2;
+            g.FillEllipse(playheadBrush, x - offset, railY - offset, PlayheadDiameter, PlayheadDiameter);
         }
 
-        private int TimeToX(int timeMs, int pad, int usableWidth)
+        private int TimeToX(int timeMs)
         {
             double ratio = Math.Max(0.0, Math.Min(1.0, timeMs / (double)timelineEndMs));
-            return pad + (int)(ratio * usableWidth + 0.5);
+            return RailLeft + (int)(ratio * RailWidth + 0.5);
+        }
+
+        private Pen GetMarkerPen(int kind)
+        {
+            if (kind == 0) return missPen;
+            if (kind == 50) return fiftyPen;
+            return hundredPen;
+        }
+
+        private Rectangle OverviewBounds
+        {
+            get
+            {
+                int inset = Width > BackgroundInset * 2 ? BackgroundInset : 0;
+                return new Rectangle(inset, 0, Math.Max(1, Width - inset * 2), Math.Max(1, Math.Min(OverviewHeight, Height)));
+            }
+        }
+
+        private int RailLeft
+        {
+            get { return Width > RailInset * 2 ? RailInset : 0; }
+        }
+
+        private int RailRight
+        {
+            get { return Width > RailInset * 2 ? Width - RailInset : Math.Max(0, Width - 1); }
+        }
+
+        private int RailWidth
+        {
+            get { return Math.Max(1, RailRight - RailLeft); }
         }
 
         private static void FillRoundedRectangle(Graphics g, Brush brush, Rectangle rect, int radius)
@@ -169,6 +217,12 @@ namespace osuReplayEditor
                 return;
 
             int diameter = Math.Max(1, radius * 2);
+            if (diameter > rect.Width || diameter > rect.Height)
+            {
+                g.FillRectangle(brush, rect);
+                return;
+            }
+
             using (GraphicsPath path = new GraphicsPath())
             {
                 path.AddArc(rect.Left, rect.Top, diameter, diameter, 180, 90);

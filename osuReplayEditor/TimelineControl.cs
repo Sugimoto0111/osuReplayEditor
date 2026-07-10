@@ -10,7 +10,21 @@ namespace osuReplayEditor
     {
         private const int Key1Mask = 5;
         private const int Key2Mask = 10;
-        private const int TimelinePad = 10;
+        private const int TimelineInset = 40;
+        private const int LowerTimelineHeight = 172;
+        private const int Key1ZoneY = 30;
+        private const int Key2ZoneY = 105;
+        private const int ZoneHeight = 45;
+        private const int ZoneRadius = 15;
+        private const int KeyInputTopOffset = 6;
+        private const int KeyInputHeight = 32;
+        private const int KeyInputRadius = 5;
+        private const int HitObjectCenterY = 86;
+        private const int HitObjectHeight = 10;
+        private const int PlayheadTriangleBaseY = 10;
+        private const int PlayheadTriangleTipY = 20;
+        private const int PlayheadLineTop = 30;
+        private const int PlayheadLineBottom = 145;
 
         private struct ReplayFrameView
         {
@@ -67,19 +81,13 @@ namespace osuReplayEditor
         private readonly List<ReplayFrameView> frames = new List<ReplayFrameView>();
         private readonly List<HitObjectView> hitObjects = new List<HitObjectView>();
 
-        private readonly Brush backgroundBrush = new SolidBrush(Color.FromArgb(17, 17, 19));
-        private readonly Brush seekRailBrush = new SolidBrush(Color.FromArgb(48, 49, 52));
-        private readonly Brush seekFillBrush = new SolidBrush(Color.FromArgb(212, 217, 225));
-        private readonly Brush laneBrush = new SolidBrush(Color.FromArgb(35, 35, 36));
-        private readonly Brush key1Brush = new SolidBrush(Color.FromArgb(187, 100, 218));
-        private readonly Brush key2Brush = new SolidBrush(Color.FromArgb(249, 152, 65));
-        private readonly Brush noteCircleBrush = new SolidBrush(Color.FromArgb(224, 230, 238));
-        private readonly Brush noteSliderBrush = new SolidBrush(Color.FromArgb(170, 177, 188));
-        private readonly Brush noteSpinnerBrush = new SolidBrush(Color.FromArgb(130, 138, 150));
-        private readonly Brush textBrush = new SolidBrush(Color.FromArgb(190, 195, 204));
-        private readonly Brush playheadBrush = new SolidBrush(Color.WhiteSmoke);
-        private readonly Pen dividerPen = new Pen(Color.FromArgb(232, 235, 240), 2f);
-        private readonly Pen noteOutlinePen = new Pen(Color.FromArgb(242, 245, 250), 1f);
+        private readonly Brush backgroundBrush = new SolidBrush(Color.FromArgb(23, 23, 23));
+        private readonly Brush laneBrush = new SolidBrush(Color.FromArgb(40, 40, 40));
+        private readonly Brush key1Brush = new SolidBrush(Color.FromArgb(187, 107, 217));
+        private readonly Brush key2Brush = new SolidBrush(Color.FromArgb(242, 153, 74));
+        private readonly Brush hitObjectBrush = new SolidBrush(Color.FromArgb(51, 255, 255, 255));
+        private readonly Brush playheadBrush = new SolidBrush(Color.White);
+        private readonly Pen playheadPen = new Pen(Color.White, 2.5f);
 
         public TimelineControl() : base()
         {
@@ -87,6 +95,7 @@ namespace osuReplayEditor
             this.TimelineEndMs = 1;
             this.ViewDurationMs = 2000;
             this.TabStop = true;
+            this.MinimumSize = new Size(TimelineInset * 2, LowerTimelineHeight);
             this.DoubleBuffered = true;
             this.SetStyle(
                 ControlStyles.UserPaint |
@@ -96,6 +105,22 @@ namespace osuReplayEditor
                 ControlStyles.Selectable,
                 true);
             this.Paint += Timeline_Paint;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                backgroundBrush.Dispose();
+                laneBrush.Dispose();
+                key1Brush.Dispose();
+                key2Brush.Dispose();
+                hitObjectBrush.Dispose();
+                playheadBrush.Dispose();
+                playheadPen.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
 
         public void SetReplayFrames(int[] times, int[] keys, int count)
@@ -169,13 +194,13 @@ namespace osuReplayEditor
 
         public int XToTimeMs(int x)
         {
-            double ratio = Math.Max(0.0, Math.Min(1.0, (x - TimelinePad) / (double)Math.Max(1, Width - TimelinePad * 2)));
+            double ratio = Math.Max(0.0, Math.Min(1.0, (x - TimelineLeft) / (double)TimelineWidth));
             return viewStartMs + (int)(ratio * (viewEndMs - viewStartMs));
         }
 
         public bool IsSeekLane(int y)
         {
-            return y >= SeekRect.Top - 6 && y <= SeekRect.Bottom + 10;
+            return false;
         }
 
         public int GetKeyLane(int y)
@@ -187,29 +212,11 @@ namespace osuReplayEditor
             return 0;
         }
 
-        private Rectangle SeekRect
-        {
-            get
-            {
-                return new Rectangle(TimelinePad, 13, Math.Max(1, Width - TimelinePad * 2), 5);
-            }
-        }
-
         private Rectangle Key1Rect
         {
             get
             {
-                int laneHeight = LaneHeight;
-                return new Rectangle(TimelinePad, 34, Math.Max(1, Width - TimelinePad * 2), laneHeight);
-            }
-        }
-
-        private Rectangle HitObjectRect
-        {
-            get
-            {
-                Rectangle k1 = Key1Rect;
-                return new Rectangle(k1.Left, k1.Bottom + LaneGap, k1.Width, k1.Height);
+                return new Rectangle(TimelineLeft, Key1ZoneY, TimelineWidth, ZoneHeight);
             }
         }
 
@@ -217,19 +224,23 @@ namespace osuReplayEditor
         {
             get
             {
-                Rectangle hitObject = HitObjectRect;
-                return new Rectangle(hitObject.Left, hitObject.Bottom + LaneGap, hitObject.Width, hitObject.Height);
+                return new Rectangle(TimelineLeft, Key2ZoneY, TimelineWidth, ZoneHeight);
             }
         }
 
-        private int LaneHeight
+        private int TimelineLeft
         {
-            get { return Math.Max(16, (Height - 56) / 3); }
+            get { return Width > TimelineInset * 2 ? TimelineInset : 0; }
         }
 
-        private int LaneGap
+        private int TimelineRight
         {
-            get { return Math.Max(5, Math.Min(8, Height / 18)); }
+            get { return Width > TimelineInset * 2 ? Width - TimelineInset : Math.Max(0, Width - 1); }
+        }
+
+        private int TimelineWidth
+        {
+            get { return Math.Max(1, TimelineRight - TimelineLeft); }
         }
 
         private void Timeline_Paint(object sender, PaintEventArgs e)
@@ -238,86 +249,58 @@ namespace osuReplayEditor
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(Parent?.BackColor ?? Color.FromArgb(10, 10, 11));
 
-            Rectangle bounds = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
-            FillRoundedRectangle(g, backgroundBrush, bounds, 8);
+            Rectangle bounds = new Rectangle(0, 0, Math.Max(1, Width), Math.Max(1, Height));
+            g.FillRectangle(backgroundBrush, bounds);
 
-            DrawSeek(g);
-            DrawKeyLane(g, Key1Rect, "K1", Key1Mask, key1Brush);
-            DrawHitObjectLane(g, HitObjectRect);
-            DrawKeyLane(g, Key2Rect, "K2", Key2Mask, key2Brush);
+            DrawKeyLane(g, Key1Rect, Key1Mask, key1Brush);
+            DrawHitObjects(g);
+            DrawKeyLane(g, Key2Rect, Key2Mask, key2Brush);
             DrawPlayhead(g);
         }
 
-        private void DrawSeek(Graphics g)
-        {
-            Rectangle seek = SeekRect;
-            FillRoundedRectangle(g, seekRailBrush, seek, 3);
-
-            int playheadX = TimeToX(viewStartMs + (int)(Value * (viewEndMs - viewStartMs)), seek.Left, seek.Width);
-            if (playheadX > seek.Left)
-            {
-                FillRoundedRectangle(g, seekFillBrush, new Rectangle(seek.Left, seek.Top, playheadX - seek.Left, seek.Height), 3);
-            }
-        }
-
-        private void DrawKeyLane(Graphics g, Rectangle lane, string label, int mask, Brush activeBrush)
+        private void DrawKeyLane(Graphics g, Rectangle lane, int mask, Brush activeBrush)
         {
             if (lane.Width <= 0 || lane.Height <= 0) return;
 
-            FillRoundedRectangle(g, laneBrush, lane, 6);
+            FillRoundedRectangle(g, laneBrush, lane, ZoneRadius);
 
-            Rectangle clip = new Rectangle(lane.Left + 4, lane.Top + 4, Math.Max(1, lane.Width - 8), Math.Max(1, lane.Height - 8));
+            Rectangle clip = new Rectangle(lane.Left, lane.Top + KeyInputTopOffset, lane.Width, KeyInputHeight);
             foreach (Rectangle segment in KeySegments(mask, clip))
             {
-                g.FillRectangle(activeBrush, segment);
-            }
-
-            g.DrawString(label, Font, textBrush, lane.Left + 8, lane.Top + (lane.Height - Font.Height) / 2);
-
-            using (Pen subtlePen = new Pen(Color.FromArgb(46, 46, 48), 1f))
-            {
-                g.DrawLine(subtlePen, lane.Left + 6, lane.Top, lane.Right - 6, lane.Top);
+                FillRoundedRectangle(g, activeBrush, segment, KeyInputRadius);
             }
         }
 
-        private void DrawHitObjectLane(Graphics g, Rectangle lane)
+        private void DrawHitObjects(Graphics g)
         {
-            if (lane.Width <= 0 || lane.Height <= 0) return;
+            int top = HitObjectCenterY - HitObjectHeight / 2;
+            int left = TimelineLeft;
+            int width = TimelineWidth;
+            int right = TimelineRight;
 
-            FillRoundedRectangle(g, laneBrush, lane, 6);
-
-            Rectangle clip = new Rectangle(lane.Left + 5, lane.Top + 4, Math.Max(1, lane.Width - 10), Math.Max(1, lane.Height - 8));
             foreach (HitObjectView hitObject in hitObjects)
             {
                 if (hitObject.EndMs < viewStartMs || hitObject.StartMs > viewEndMs)
                     continue;
 
-                if (hitObject.Kind == 2 || hitObject.Kind == 3)
+                if ((hitObject.Kind == 2 || hitObject.Kind == 3) && hitObject.EndMs > hitObject.StartMs)
                 {
-                    int x1 = TimeToX(hitObject.StartMs, clip.Left, clip.Width);
-                    int x2 = TimeToX(Math.Max(hitObject.EndMs, hitObject.StartMs + 1), clip.Left, clip.Width);
+                    int x1 = TimeToX(hitObject.StartMs, left, width);
+                    int x2 = TimeToX(hitObject.EndMs, left, width);
+
+                    x1 = Math.Max(left, Math.Min(right, x1));
+                    x2 = Math.Max(left, Math.Min(right, x2));
                     if (x2 <= x1) x2 = x1 + 2;
 
-                    x1 = Math.Max(clip.Left, Math.Min(clip.Right, x1));
-                    x2 = Math.Max(clip.Left, Math.Min(clip.Right, x2));
-
-                    int barHeight = Math.Max(5, Math.Min(10, clip.Height / 2));
-                    Rectangle bar = new Rectangle(x1, clip.Top + (clip.Height - barHeight) / 2, Math.Max(2, x2 - x1), barHeight);
-                    FillRoundedRectangle(g, hitObject.Kind == 2 ? noteSliderBrush : noteSpinnerBrush, bar, Math.Max(2, barHeight / 2));
+                    Rectangle bar = new Rectangle(x1, top, Math.Max(2, x2 - x1), HitObjectHeight);
+                    FillRoundedRectangle(g, hitObjectBrush, bar, HitObjectHeight / 2);
                 }
                 else
                 {
-                    int x = TimeToX(hitObject.StartMs, clip.Left, clip.Width);
-                    int radius = Math.Max(3, Math.Min(6, clip.Height / 3));
-                    Rectangle circle = new Rectangle(x - radius, clip.Top + clip.Height / 2 - radius, radius * 2, radius * 2);
-                    g.FillEllipse(noteCircleBrush, circle);
-                    g.DrawEllipse(noteOutlinePen, circle);
+                    int x = TimeToX(hitObject.StartMs, left, width);
+                    Rectangle marker = new Rectangle(x - HitObjectHeight / 2, top, HitObjectHeight, HitObjectHeight);
+                    FillRoundedRectangle(g, hitObjectBrush, marker, HitObjectHeight / 2);
                 }
-            }
-
-            using (Pen subtlePen = new Pen(Color.FromArgb(46, 46, 48), 1f))
-            {
-                g.DrawLine(subtlePen, lane.Left + 6, lane.Top, lane.Right - 6, lane.Top);
             }
         }
 
@@ -364,14 +347,15 @@ namespace osuReplayEditor
 
         private void DrawPlayhead(Graphics g)
         {
-            int x = TimeToX(viewStartMs + (int)(Value * (viewEndMs - viewStartMs)), TimelinePad, Math.Max(1, Width - TimelinePad * 2));
-            g.DrawLine(dividerPen, x, 24, x, Height - 7);
+            int x = Math.Max(0, Width / 2);
+            int lineBottom = Math.Min(PlayheadLineBottom, Math.Max(PlayheadLineTop, Height - 1));
+            g.DrawLine(playheadPen, x, PlayheadLineTop, x, lineBottom);
 
             Point[] triangle =
             {
-                new Point(x, 26),
-                new Point(x - 5, 20),
-                new Point(x + 5, 20),
+                new Point(x - 6, PlayheadTriangleBaseY),
+                new Point(x + 6, PlayheadTriangleBaseY),
+                new Point(x, PlayheadTriangleTipY),
             };
             g.FillPolygon(playheadBrush, triangle);
         }
