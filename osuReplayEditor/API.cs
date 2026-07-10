@@ -37,6 +37,12 @@ namespace osuReplayEditor
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         public static extern bool LoadReplay(string fname);
 
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+        public static extern void SetBeatmapFileOverride(string fname);
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+        public static extern void SetSkinDirectory(string dir);
+
         /// <summary>
         /// call this when your openGL contorl resizes
         /// </summary>
@@ -251,6 +257,21 @@ namespace osuReplayEditor
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
         public static extern bool SetFrameKeyPress(int mask);
 
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetReplayFrameCount();
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetReplayFrames([Out] int[] times, [Out] int[] keys, int capacity);
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetTimelineHitObjectCount();
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetTimelineHitObjects([Out] int[] startTimes, [Out] int[] endTimes, [Out] int[] kinds, int capacity);
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern bool SetFrameKeyPressRange(int startMs, int endMs, int keyMask, bool pressed);
+
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         public static extern bool LoadSave(string saveFileName);
 
@@ -259,6 +280,9 @@ namespace osuReplayEditor
 
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
         public static extern bool ExportAsOsr(string osrFileName);
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Unicode)]
+        public static extern bool ExportAsOsrWithLazerKeys(string osrFileName);
 
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
         public static extern void VisualMapInvert(bool value);
@@ -372,6 +396,18 @@ namespace osuReplayEditor
         public static extern void AnalyzeAccuracy(bool doTrace, ref int num300, ref int num100, ref int num50, ref int numMiss, ref float accuracy, ref float avgEarly, ref float avgLate, ref float unstableRate);
 
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetTimelineJudgementMarkerCount();
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetTimelineJudgementMarkers([Out] int[] times, [Out] int[] kinds, int capacity);
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetHitErrorMarkerCount();
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern int GetHitErrorMarkers([Out] int[] times, [Out] int[] errors, [Out] int[] points, int capacity);
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
         public static extern int NextHitObject();
 
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
@@ -390,10 +426,19 @@ namespace osuReplayEditor
         public static extern bool GetHitInfo(int index, ref int kind, ref bool isMiss, ref int hitError, ref int points);
 
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern bool JudgementHasUnsupportedMods();
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern bool AnalyzeAndApplyReplayMetadata();
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
         public static extern void SetTool(int tool);
 
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
         public static extern void SetBrushRadius(int brushRadius);
+
+        [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern void SetEditorWindow(int startMs, int endMs);
 
         [DllImport("ReplayEditor.dll", CallingConvention = CallingConvention.StdCall)]
         public static extern void RelaxRecalculateAllHits();

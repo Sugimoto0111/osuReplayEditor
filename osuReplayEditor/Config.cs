@@ -12,13 +12,15 @@ namespace osuReplayEditor
         public readonly string Description;
         public readonly bool Required;
         public readonly ConfigValidation Validation;
-        public ConfigValue(string defaultValue, string description, bool required, ConfigValidation validation)
+        public readonly bool WriteToFile;
+        public ConfigValue(string defaultValue, string description, bool required, ConfigValidation validation, bool writeToFile = true)
         {
             Value = null;
             DefaultValue = defaultValue;
             Description = description;
             Required = required;
             Validation = validation;
+            WriteToFile = writeToFile;
         }
     }
 
@@ -30,7 +32,8 @@ namespace osuReplayEditor
 
         private const string K_OSU_DB_PATH = "osu_db_path";
         private const string K_SONG_DIR_PATH = "osu_song_folder";
-        private const string K_REPLAY_DIR_PATH = "osu_replay_folder";
+        private const string K_LEGACY_REPLAY_DIR_PATH = "osu_replay_folder";
+        private const string K_OSU_API_KEY = "osu_api_key";
         private const string K_UPDATE_URL = "update_url";
 
         private readonly Dictionary<string, ConfigValue> pairs = new Dictionary<string, ConfigValue>();
@@ -48,16 +51,16 @@ namespace osuReplayEditor
             set { pairs[K_SONG_DIR_PATH].Value = value; }
         }
 
-        public string ReplayDirPath
-        {
-            get { return pairs[K_REPLAY_DIR_PATH]?.Value; }
-            set { pairs[K_REPLAY_DIR_PATH].Value = value; }
-        }
-
         public string UpdateUrl
         {
             get { return pairs[K_UPDATE_URL]?.Value; }
             set { pairs[K_UPDATE_URL].Value = value; }
+        }
+
+        public string OsuApiKey
+        {
+            get { return pairs[K_OSU_API_KEY]?.Value; }
+            set { pairs[K_OSU_API_KEY].Value = value; }
         }
 
         private void WriteComment(StreamWriter writer, string msg)
@@ -75,6 +78,8 @@ namespace osuReplayEditor
                 writer.WriteLine("# Blank lines and lines starting with '#' are ignored");
                 foreach (var entry in pairs)
                 {
+                    if (!entry.Value.WriteToFile)
+                        continue;
                     writer.WriteLine();
                     WriteComment(writer, entry.Value.Description);
                     switch (entry.Value.Validation)
@@ -149,13 +154,20 @@ namespace osuReplayEditor
                         break;
                     case ConfigValidation.File:
                         if (kv.Value.Value != null && !File.Exists(kv.Value.Value))
-                            throw new Exception($"Item '{kv.Key}' ({kv.Value.Description}) - the file specified ({kv.Value.Value}) does not exist");
+                        {
+                            if (kv.Value.Required)
+                                throw new Exception($"Item '{kv.Key}' ({kv.Value.Description}) - the file specified ({kv.Value.Value}) does not exist");
+                        }
                         break;
                     case ConfigValidation.Directory:
                         if (kv.Value.Value != null)
                         {
                             if (!Directory.Exists(kv.Value.Value))
-                                throw new Exception($"Item '{kv.Key}' ({kv.Value.Description}) - the folder specified ({kv.Value.Value}) does not exist");
+                            {
+                                if (kv.Value.Required)
+                                    throw new Exception($"Item '{kv.Key}' ({kv.Value.Description}) - the folder specified ({kv.Value.Value}) does not exist");
+                                break;
+                            }
                             char lastChar = kv.Value.Value[kv.Value.Value.Length - 1];
                             if (lastChar != '\\' && lastChar != '/')
                                 kv.Value.Value += '\\';
@@ -169,9 +181,10 @@ namespace osuReplayEditor
         {
             LoadedFromFile = false;
             FileName = fname;
-            pairs.Add(K_OSU_DB_PATH, new ConfigValue(@"C:\osu!\osu!.db", "Path to osu db", true, ConfigValidation.File));
-            pairs.Add(K_SONG_DIR_PATH, new ConfigValue(@"C:\osu!\songs\", "Path to song folder", true, ConfigValidation.Directory));
-            pairs.Add(K_REPLAY_DIR_PATH, new ConfigValue(@"C:\osu!\replays\", "Path to replay folder, used by \"quick load\"", false, ConfigValidation.Directory));
+            pairs.Add(K_OSU_DB_PATH, new ConfigValue("", "Optional path to osu!.db for legacy local beatmap lookup", false, ConfigValidation.File, false));
+            pairs.Add(K_SONG_DIR_PATH, new ConfigValue("", "Optional path to osu! Songs folder for legacy local beatmap/audio lookup", false, ConfigValidation.Directory, false));
+            pairs.Add(K_LEGACY_REPLAY_DIR_PATH, new ConfigValue("", "Legacy replay folder path, no longer used", false, ConfigValidation.None, false));
+            pairs.Add(K_OSU_API_KEY, new ConfigValue("", "osu! API v1 key used to fetch .osu files from replay beatmap MD5", false, ConfigValidation.None));
             pairs.Add(K_UPDATE_URL, new ConfigValue(@"https://raw.githubusercontent.com/thebetioplane/osuReplayEditorV3/master/", "Url for automatic updates", false, ConfigValidation.None));
             try
             {

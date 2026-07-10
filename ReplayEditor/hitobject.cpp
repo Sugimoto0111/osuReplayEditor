@@ -3,9 +3,11 @@
 // clang-format on
 #include "hitobject.hpp"
 
+#include <cstddef>
 #include <cstdint>
 
 #include "beatmapengine.hpp"
+#include "lazer_judgement.hpp"
 #include "replayengine.hpp"
 #include "texture.hpp"
 
@@ -45,6 +47,71 @@ static glm::vec2 invert_vec(const glm::vec2 &v)
     return glm::vec2(v.x, 384.0 - v.y);
 }
 
+static bool primary_judgement_points(const hitobject_t *obj, int *points)
+{
+    if (obj == nullptr || beatmapengine::hitobjects.empty()) return false;
+
+    const hitobject_t *data = beatmapengine::hitobjects.data();
+    const ptrdiff_t source_index = obj - data;
+    if (source_index < 0 || source_index >= static_cast<ptrdiff_t>(beatmapengine::hitobjects.size())) return false;
+
+    lazer_judgement::JudgedObjectType wanted_type = lazer_judgement::JudgedObjectType::Circle;
+    switch (obj->hitobject_type) {
+        case HitObjectType::Circle:
+            wanted_type = lazer_judgement::JudgedObjectType::Circle;
+            break;
+        case HitObjectType::Slider:
+            wanted_type = lazer_judgement::JudgedObjectType::SliderHead;
+            break;
+        case HitObjectType::Spinner:
+            wanted_type = lazer_judgement::JudgedObjectType::Spinner;
+            break;
+        default:
+            return false;
+    }
+
+    for (const auto &judged : lazer_judgement::judged_objects()) {
+        if (judged.source_hitobject_index != source_index || judged.object_type != wanted_type) continue;
+        *points = lazer_judgement::aggregate_points(judged);
+        return true;
+    }
+    return false;
+}
+
+static void glColorJudgement(int points, float alpha)
+{
+    switch (points) {
+        case 0:
+            glColor4f(1.0f, 0.18f, 0.18f, alpha);
+            break;
+        case 50:
+            glColor4f(1.0f, 0.85f, 0.15f, alpha);
+            break;
+        case 100:
+            glColor4f(0.25f, 0.95f, 0.35f, alpha);
+            break;
+        default:
+            glColor4f(1.0f, 1.0f, 1.0f, alpha);
+            break;
+    }
+}
+
+static void glColorHitObjectJudgement(const hitobject_t *obj, float alpha)
+{
+    int points = 300;
+    if (!primary_judgement_points(obj, &points)) points = 300;
+    glColorJudgement(points, alpha);
+}
+
+static void draw_hitcircle(glm::vec2 pos, glm::vec2 size, float alpha)
+{
+    textures::hitcircle->draw(pos, size * 0.5f, size);
+    if (textures::hitcircleoverlay != nullptr) {
+        glColor4f(1.0f, 1.0f, 1.0f, alpha);
+        textures::hitcircleoverlay->draw(pos, size * 0.5f, size);
+    }
+}
+
 static unsigned char comma_ahead(const char *&def, int amt)
 {
     while (*def) {
@@ -56,10 +123,10 @@ static unsigned char comma_ahead(const char *&def, int amt)
 }
 
 hitobject_t::hitobject_t(const char *def) noexcept
-    : is_miss(true), hit_error(0), stack_count(0), left(nullptr), right(nullptr), max_in_subtree(MIN_SONG_TIME)
+    : hit_sound(0), is_miss(true), hit_error(0), stack_count(0), left(nullptr), right(nullptr), max_in_subtree(MIN_SONG_TIME)
 {
     int kind;
-    if (sscanf_s(def, "%f,%f,%d,%d", &pos.x, &pos.y, &start, &kind) != 4) fatal(".osr bad format");
+    if (sscanf_s(def, "%f,%f,%d,%d,%d", &pos.x, &pos.y, &start, &kind, &hit_sound) < 4) fatal(".osr bad format");
     slider = nullptr;
     if (KIND_IS_CIRCLE) {
         end = start;
@@ -90,6 +157,7 @@ hitobject_t::hitobject_t(const glm::vec2 &my_pos, SongTime_t my_start, SongTime_
       end(my_end),
       hitobject_type(my_hit_object_type),
       slider(nullptr),
+      hit_sound(0),
       is_miss(true),
       hit_error(0),
       stack_count(0),
@@ -108,17 +176,17 @@ void hitobject_t::draw_bg(SongTime_t ms) const
             glm::vec2 size = glm::vec2(beatmapengine::circleradius() * 2.0f);
             if (slider) {
                 slider->draw(ms, start, end, o);
-                glColor4f(1.0f, 1.0f, 1.0f, o);
+                glColorHitObjectJudgement(this, o);
                 if (beatmapengine::hitobjects_inverted)
-                    textures::hitcircle->draw(invert_vec(slider->end_pos()), size * 0.5f, size);
+                    draw_hitcircle(invert_vec(slider->end_pos()), size, o);
                 else
-                    textures::hitcircle->draw(slider->end_pos(), size * 0.5f, size);
+                    draw_hitcircle(slider->end_pos(), size, o);
             }
-            glColor4f(1.0f, 1.0f, 1.0f, o);
+            glColorHitObjectJudgement(this, o);
             if (beatmapengine::hitobjects_inverted)
-                textures::hitcircle->draw(invert_vec(pos), size * 0.5f, size);
+                draw_hitcircle(invert_vec(pos), size, o);
             else
-                textures::hitcircle->draw(pos, size * 0.5f, size);
+                draw_hitcircle(pos, size, o);
             break;
         }
     }
@@ -141,7 +209,7 @@ void hitobject_t::draw_fg(SongTime_t ms) const
         }
         case HitObjectType::Circle:
         case HitObjectType::Slider: {
-            glColor4f(1.0f, 1.0f, 1.0f, o);
+            glColorHitObjectJudgement(this, o);
             glm::vec2 size = glm::vec2(beatmapengine::circleradius() * 2.0f);
             size *= glm::mix(4.0f, 1.0f, approach(start, ms));
             if (beatmapengine::hitobjects_inverted)

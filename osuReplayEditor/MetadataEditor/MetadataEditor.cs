@@ -41,6 +41,7 @@ namespace osuReplayEditor.MetadataEditor
         public MetadataEditorForm()
         {
             InitializeComponent();
+            ModernTheme.Apply(this);
             dateTimePicker.CustomFormat = "yyyy-MM-dd HH:mm:ss";
         }
 

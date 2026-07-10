@@ -15,6 +15,12 @@ namespace osuReplayEditor
         [STAThread]
         static int Main(string[] args)
         {
+            string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            if (!string.IsNullOrEmpty(exeDir))
+            {
+                Directory.SetCurrentDirectory(exeDir);
+            }
+
             foreach (var arg in args)
             {
                 if (arg == "-do_repair")

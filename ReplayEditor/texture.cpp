@@ -5,7 +5,9 @@
 
 #include <string.h>
 
+#include <fstream>
 #include <memory>
+#include <string>
 
 #include "../LZMA/LzmaDec.h"
 #include "breader.hpp"
@@ -165,6 +167,7 @@ void texture_t::draw(glm::vec2 pos, glm::vec2 origin, glm::vec2 size) const
 }
 
 texture_t *textures::hitcircle = nullptr;
+texture_t *textures::hitcircleoverlay = nullptr;
 texture_t *textures::approachcircle = nullptr;
 texture_t *textures::cursor = nullptr;
 texture_t *textures::sliderbody = nullptr;
@@ -173,16 +176,45 @@ texture_t *textures::vertex = nullptr;
 texture_t *textures::markerA = nullptr;
 texture_t *textures::markerB = nullptr;
 texture_t *textures::slidertick = nullptr;
+static std::wstring skin_directory;
 
-#define INIT_TEX(var_name, w, h)                                                        \
-    do {                                                                                \
-        var_name = texture_t::from_file(L"assets/" #var_name L".raw", w, h, GL_LINEAR); \
-        if (var_name == nullptr) return false;                                          \
+static bool file_exists(const std::wstring &path)
+{
+    std::ifstream file(path, std::ios::binary);
+    return file.good();
+}
+
+static std::wstring join_path(const std::wstring &dir, const wchar_t *name)
+{
+    if (dir.empty()) return L"";
+    const wchar_t last = dir.back();
+    if (last == L'\\' || last == L'/') return dir + name;
+    return dir + L"\\" + name;
+}
+
+void textures::set_skin_directory(const std::wstring &path)
+{
+    skin_directory = path;
+}
+
+#define INIT_TEX(var_name, w, h)                                                                          \
+    do {                                                                                                  \
+        std::wstring skin_path = join_path(skin_directory, L"" #var_name L".raw");                        \
+        if (!skin_path.empty() && file_exists(skin_path)) var_name = texture_t::from_file(skin_path, w, h, GL_LINEAR); \
+        if (var_name == nullptr) var_name = texture_t::from_file(L"assets/" #var_name L".raw", w, h, GL_LINEAR);      \
+        if (var_name == nullptr) return false;                                                            \
+    } while (0)
+
+#define INIT_OPTIONAL_SKIN_TEX(var_name, w, h)                                                           \
+    do {                                                                                                  \
+        std::wstring skin_path = join_path(skin_directory, L"" #var_name L".raw");                        \
+        if (!skin_path.empty() && file_exists(skin_path)) var_name = texture_t::from_file(skin_path, w, h, GL_LINEAR); \
     } while (0)
 
 bool textures::init()
 {
     INIT_TEX(hitcircle, 128, 128);
+    INIT_OPTIONAL_SKIN_TEX(hitcircleoverlay, 128, 128);
     INIT_TEX(approachcircle, 128, 128);
     INIT_TEX(cursor, 32, 32);
     INIT_TEX(sliderbody, 128, 128);

@@ -11,7 +11,10 @@ namespace beatmapengine
 bool init(const std::wstring &f);
 float slider_velocity_at(SongTime_t);
 float beat_length_at(SongTime_t);
+int sample_set_at(SongTime_t);
+float sample_volume_at(SongTime_t);
 void draw(SongTime_t);
+void update_hitsounds(SongTime_t ms, bool is_playing);
 extern std::vector<hitobject_t> hitobjects;
 extern float stack_leniency;
 extern float hp;
@@ -20,6 +23,13 @@ extern float od;
 extern float ar;
 extern float slider_mult;
 extern float slider_tick_rate;
+extern float base_hp;
+extern float base_cs;
+extern float base_od;
+extern float base_ar;
+extern float base_slider_mult;
+extern float base_slider_tick_rate;
+extern std::wstring audio_path;
 static constexpr inline float map_difficulty_range(float value, float low, float mid, float high)
 {
     if (value > 5) return mid + (high - mid) * (value - 5.f) / 5.f;

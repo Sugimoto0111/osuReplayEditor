@@ -283,6 +283,21 @@ bool Replay::write_to(const std::wstring &fname)
     } else {
         std::stringstream ss;
         I64 last_action_ms = 0;
+
+        const auto first_serializable =
+            std::find_if(m_frames.begin(), m_frames.end(), [](const ReplayFrame &frame) {
+                return !std::isnan(frame.p.x) && !std::isinf(frame.p.x) && !std::isnan(frame.p.y) &&
+                       !std::isinf(frame.p.y);
+            });
+
+        // The osu! replay text format stores deltas. A leading frame at time <= 0
+        // would otherwise be discarded by the legacy reader's initial 0-delta skip.
+        if (first_serializable != m_frames.end() && first_serializable->ms <= 0) {
+            const I64 primer_ms = static_cast<I64>(first_serializable->ms) - 1;
+            ss << primer_ms << '|' << first_serializable->p.x << '|' << first_serializable->p.y << "|0,";
+            last_action_ms = primer_ms;
+        }
+
         for (const auto &frame : m_frames) {
             if (std::isnan(frame.p.x) || std::isinf(frame.p.x) || std::isnan(frame.p.y) || std::isinf(frame.p.y)) {
                 continue;

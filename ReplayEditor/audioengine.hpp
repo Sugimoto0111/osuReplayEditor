@@ -27,6 +27,8 @@ class AudioEngine
 
 bool init();
 void load_with_fallback(const std::wstring &fname, SongTime_t start_time, SongTime_t end_time);
+void set_skin_directory(const std::wstring &path);
+void play_hitsound(int hit_sound, int sample_set, float volume);
 
 extern AudioEngine *handle;
 

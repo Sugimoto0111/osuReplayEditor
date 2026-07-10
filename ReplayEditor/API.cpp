@@ -4,11 +4,13 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <fstream>
 
 #include "accuracy_analyzer.hpp"
 #include "audioengine.hpp"
 #include "beatmapengine.hpp"
 #include "config.hpp"
+#include "lazer_judgement.hpp"
 #include "osudb.hpp"
 #include "relax.hpp"
 #include "replayengine.hpp"
@@ -39,6 +41,15 @@ class GraphicsHandle
 };
 
 GraphicsHandle graphics_handle;
+std::wstring beatmap_file_override;
+
+void normalize_tap_keys_for_lazer_export(replayengine::Replay &replay)
+{
+    for (auto &frame : replay.mut_frames()) {
+        if ((frame.keys & 0x5) != 0) frame.keys |= 0x5;
+        if ((frame.keys & 0xA) != 0) frame.keys |= 0xA;
+    }
+}
 
 void setup_graphics(HWND hWnd)
 {
@@ -122,11 +133,16 @@ DLLFUN(INT) Init(HWND hWnd, const wchar_t *osu_db_path, const wchar_t *song_path
     if (hWnd == nullptr) return NULL_HWND;
     error_message_owner = hWnd;
     setup_graphics(hWnd);
-    config::osu_db_path = osu_db_path;
-    config::song_path = song_path;
+    config::osu_db_path = osu_db_path ? osu_db_path : L"";
+    config::song_path = song_path ? song_path : L"";
     config::init();
     if (!audioengine::init()) return AUDIO_FAILURE;
-    if (!osudb::init()) return OSUDB_FAILURE;
+    if (!config::osu_db_path.empty()) {
+        std::ifstream db_file(config::osu_db_path);
+        if (db_file.good() && !osudb::init()) {
+            not_fatal("osu!.db could not be read. Online beatmap lookup will still be used when configured.");
+        }
+    }
     if (!replayengine::init()) return REPLAYENGINE_FAILURE;
     if (!beatmapengine::init(L"")) return BEATMAPENGINE_FAILURE;
     glEnable(GL_TEXTURE_2D);
@@ -150,6 +166,18 @@ DLLFUN(BOOL) Cleanup()
     return TRUE;
 }
 
+DLLFUN(void) SetBeatmapFileOverride(const wchar_t *fname)
+{
+    beatmap_file_override = fname ? fname : L"";
+}
+
+DLLFUN(void) SetSkinDirectory(const wchar_t *dir)
+{
+    const std::wstring path = dir ? dir : L"";
+    textures::set_skin_directory(path);
+    audioengine::set_skin_directory(path);
+}
+
 DLLFUN(BOOL) LoadReplay(const wchar_t *fname)
 {
     using ::replayengine::Replay;
@@ -157,26 +185,29 @@ DLLFUN(BOOL) LoadReplay(const wchar_t *fname)
     if (!replayengine::MutateCurrentView([&fname](const Replay &, Replay &next) { return next.read_from(fname); })) {
         return FALSE;
     }
+    lazer_judgement::mark_dirty();
     std::wstring osu_path;
     std::wstring song_path;
-    if (!osudb::get_entry(replayengine::CurrentView()->metadata().beatmap_hash, osu_path, song_path)) {
+    if (!beatmap_file_override.empty()) {
+        osu_path = beatmap_file_override;
+    } else if (!osudb::get_entry(replayengine::CurrentView()->metadata().beatmap_hash, osu_path, song_path)) {
         not_fatal("You do not have this beatmap. Information about the hit objects cannot be loaded.");
     }
-    {
-        const std::vector<ReplayFrame> &frames = replayengine::CurrentView()->frames();
-        SongTime_t start = 0;
-        SongTime_t end = 1;
-        if (!frames.empty()) {
-            start = frames.front().ms;
-            end = frames.back().ms;
-        }
-        beatmapengine::first_hitobject_ms = start;
-        beatmapengine::last_hitobject_ms = end;
-        audioengine::load_with_fallback(song_path, start - 500, end + 500);
+    const std::vector<ReplayFrame> &frames = replayengine::CurrentView()->frames();
+    SongTime_t replay_start = 0;
+    SongTime_t replay_end = 1;
+    if (!frames.empty()) {
+        replay_start = frames.front().ms;
+        replay_end = frames.back().ms;
     }
+    beatmapengine::first_hitobject_ms = replay_start;
+    beatmapengine::last_hitobject_ms = replay_end;
     if (!beatmapengine::init(osu_path)) {
         return FALSE;
     }
+    const std::wstring audio_path = beatmapengine::audio_path.empty() ? song_path : beatmapengine::audio_path;
+    audioengine::load_with_fallback(audio_path, replay_start - 500, replay_end + 500);
+    lazer_judgement::mark_dirty();
     audioengine::handle->set_playback_speed(1.0f);
     return TRUE;
 }
@@ -233,6 +264,7 @@ DLLFUN(void) Render()
     zoom_pan.set_projection();
     glClear(GL_COLOR_BUFFER_BIT);
     const SongTime_t t = audioengine::handle->get_time();
+    beatmapengine::update_hitsounds(t, audioengine::handle->is_playing());
     beatmapengine::draw(t);
     replayengine::MutableCurrentView()->draw(t);
     ui::draw(t);
@@ -367,31 +399,37 @@ DLLFUN(float) GetBeatmapSliderMult()
 DLLFUN(void) SetBeatmapStackLeniency(float value)
 {
     beatmapengine::stack_leniency = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) SetBeatmapHP(float value)
 {
     beatmapengine::hp = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) SetBeatmapCS(float value)
 {
     beatmapengine::cs = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) SetBeatmapOD(float value)
 {
     beatmapengine::od = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) SetBeatmapAR(float value)
 {
     beatmapengine::ar = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) SetBeatmapSliderMult(float value)
 {
     beatmapengine::slider_mult = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) PlaceMarkIn()
@@ -453,15 +491,129 @@ DLLFUN(BOOL) SetFrameKeyPress(int mask)
 {
     using ::replayengine::Replay;
     if (replayengine::CurrentView()->are_in_out_marks_consistent()) {
-        return replayengine::MutateCurrentView([mask](Replay &replay) {
+        const bool changed = replayengine::MutateCurrentView([mask](Replay &replay) {
             for (auto &frame : replay.mut_selection()) {
                 frame.keys = mask;
             }
             return true;
         });
+        if (changed) lazer_judgement::mark_dirty();
+        return changed;
     } else {
         return FALSE;
     }
+}
+
+DLLFUN(INT) GetReplayFrameCount()
+{
+    return static_cast<INT>(replayengine::CurrentView()->frames().size());
+}
+
+DLLFUN(INT) GetReplayFrames(INT *times, INT *keys, INT capacity)
+{
+    if (times == nullptr || keys == nullptr || capacity <= 0) return 0;
+
+    const std::vector<replayengine::ReplayFrame> &frames = replayengine::CurrentView()->frames();
+    INT count = static_cast<INT>(frames.size());
+    if (count > capacity) count = capacity;
+
+    for (INT i = 0; i < count; ++i) {
+        times[i] = static_cast<INT>(frames[i].ms);
+        keys[i] = frames[i].keys;
+    }
+    return count;
+}
+
+DLLFUN(INT) GetTimelineHitObjectCount()
+{
+    INT count = 0;
+    for (const auto &obj : beatmapengine::hitobjects) {
+        switch (obj.hitobject_type) {
+            case HitObjectType::Circle:
+            case HitObjectType::Slider:
+            case HitObjectType::Spinner:
+                ++count;
+                break;
+            default:
+                break;
+        }
+    }
+    return count;
+}
+
+DLLFUN(INT) GetTimelineHitObjects(INT *start_times, INT *end_times, INT *kinds, INT capacity)
+{
+    if (start_times == nullptr || end_times == nullptr || kinds == nullptr || capacity <= 0) return 0;
+
+    INT count = 0;
+    for (const auto &obj : beatmapengine::hitobjects) {
+        INT kind = 0;
+        switch (obj.hitobject_type) {
+            case HitObjectType::Circle:
+                kind = 1;
+                break;
+            case HitObjectType::Slider:
+                kind = 2;
+                break;
+            case HitObjectType::Spinner:
+                kind = 3;
+                break;
+            default:
+                continue;
+        }
+
+        if (count >= capacity) break;
+        start_times[count] = static_cast<INT>(obj.start);
+        end_times[count] = static_cast<INT>(obj.end);
+        kinds[count] = kind;
+        ++count;
+    }
+    return count;
+}
+
+DLLFUN(BOOL) SetFrameKeyPressRange(INT start_ms, INT end_ms, INT key_mask, BOOL pressed)
+{
+    if (key_mask == 0) return FALSE;
+    if (start_ms > end_ms) std::swap(start_ms, end_ms);
+
+    std::vector<replayengine::ReplayFrame> &frames = replayengine::MutableCurrentView()->mut_frames();
+    if (frames.empty()) return FALSE;
+
+    const auto apply_to_frame = [key_mask, pressed](replayengine::ReplayFrame &frame) {
+        const int before = frame.keys;
+        if (pressed) {
+            frame.keys |= key_mask;
+        } else {
+            frame.keys &= ~key_mask;
+        }
+        return frame.keys != before;
+    };
+
+    bool changed = false;
+    bool touched_frame = false;
+    size_t closest_index = 0;
+    I64 closest_distance = -1;
+    const I64 midpoint = static_cast<I64>(start_ms) + (static_cast<I64>(end_ms) - start_ms) / 2;
+
+    for (size_t i = 0; i < frames.size(); ++i) {
+        const I64 frame_ms = static_cast<I64>(frames[i].ms);
+        const I64 distance = frame_ms > midpoint ? frame_ms - midpoint : midpoint - frame_ms;
+        if (closest_distance < 0 || distance < closest_distance) {
+            closest_distance = distance;
+            closest_index = i;
+        }
+
+        if (frame_ms < start_ms || frame_ms > end_ms) continue;
+        touched_frame = true;
+        changed = apply_to_frame(frames[i]) || changed;
+    }
+
+    if (!touched_frame) {
+        changed = apply_to_frame(frames[closest_index]) || changed;
+    }
+
+    if (changed) lazer_judgement::mark_dirty();
+    return changed;
 }
 
 DLLFUN(BOOL) LoadSave(const wchar_t *saveFileName)
@@ -476,21 +628,33 @@ DLLFUN(BOOL) WriteSave(const wchar_t *saveFileName)
 
 DLLFUN(BOOL) ExportAsOsr(const wchar_t *osrFileName)
 {
-    return replayengine::MutableCurrentView()->write_to(osrFileName);
+    replayengine::Replay replay = *replayengine::CurrentView();
+    normalize_tap_keys_for_lazer_export(replay);
+    return replay.write_to(osrFileName);
+}
+
+DLLFUN(BOOL) ExportAsOsrWithLazerKeys(const wchar_t *osrFileName)
+{
+    replayengine::Replay replay = *replayengine::CurrentView();
+    normalize_tap_keys_for_lazer_export(replay);
+    return replay.write_to(osrFileName);
 }
 
 DLLFUN(void) VisualMapInvert(BOOL value)
 {
     beatmapengine::hitobjects_inverted = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) InvertCursorData()
 {
     using ::replayengine::Replay;
-    replayengine::MutateCurrentView([](Replay &replay) {
+    if (replayengine::MutateCurrentView([](Replay &replay) {
         replay.invert_replay_frames();
         return true;
-    });
+    })) {
+        lazer_judgement::mark_dirty();
+    }
 }
 
 DLLFUN(BYTE) Replay_GetGamemode()
@@ -576,6 +740,7 @@ DLLFUN(void) Replay_SetPlayTimestamp(INT64 value)
 DLLFUN(void) Replay_SetGamemode(BYTE value)
 {
     replayengine::MutableCurrentView()->mut_metadata().game_mode = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) Replay_SetPlayerName(const wchar_t *str, INT len)
@@ -631,6 +796,7 @@ DLLFUN(void) Replay_SetFullCombo(BOOL value)
 DLLFUN(void) Replay_SetMods(UINT32 value)
 {
     replayengine::MutableCurrentView()->mut_metadata().mods = value;
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) ResetPanZoom()
@@ -652,7 +818,9 @@ DLLFUN(void) ZoomOut()
 
 DLLFUN(BOOL) Undo()
 {
-    return replayengine::Undo();
+    const bool changed = replayengine::Undo();
+    if (changed) lazer_judgement::mark_dirty();
+    return changed;
 }
 
 DLLFUN(void) MakeUndoSnapshot()
@@ -662,7 +830,9 @@ DLLFUN(void) MakeUndoSnapshot()
 
 DLLFUN(BOOL) Redo()
 {
-    return replayengine::Redo();
+    const bool changed = replayengine::Redo();
+    if (changed) lazer_judgement::mark_dirty();
+    return changed;
 }
 
 DLLFUN(void)
@@ -681,55 +851,126 @@ AnalyzeAccuracy(BOOL do_trace, int *num_300, int *num_100, int *num_50, int *num
     *unstable_rate = stats.unstable_rate;
 }
 
+static INT timeline_marker_kind(const lazer_judgement::JudgedObject &obj)
+{
+    if (lazer_judgement::is_miss_like(obj.result)) return 0;
+    const int points = lazer_judgement::aggregate_points(obj);
+    if (points == 50) return 50;
+    if (points == 100) return 100;
+    return -1;
+}
+
+DLLFUN(INT) GetTimelineJudgementMarkerCount()
+{
+    INT count = 0;
+    for (const auto &obj : lazer_judgement::judged_objects()) {
+        if (timeline_marker_kind(obj) != -1) ++count;
+    }
+    return count;
+}
+
+DLLFUN(INT) GetTimelineJudgementMarkers(INT *times, INT *kinds, INT capacity)
+{
+    if (times == nullptr || kinds == nullptr || capacity <= 0) return 0;
+
+    INT count = 0;
+    for (const auto &obj : lazer_judgement::judged_objects()) {
+        const INT kind = timeline_marker_kind(obj);
+        if (kind == -1) continue;
+        if (count >= capacity) break;
+        times[count] = obj.time;
+        kinds[count] = kind;
+        ++count;
+    }
+    return count;
+}
+
+static bool hit_error_bar_candidate(const lazer_judgement::JudgedObject &obj)
+{
+    if (lazer_judgement::is_miss_like(obj.result)) return false;
+    switch (obj.object_type) {
+        case lazer_judgement::JudgedObjectType::Circle:
+        case lazer_judgement::JudgedObjectType::SliderHead:
+            break;
+        default:
+            return false;
+    }
+
+    const int points = lazer_judgement::aggregate_points(obj);
+    return points == 300 || points == 100 || points == 50;
+}
+
+DLLFUN(INT) GetHitErrorMarkerCount()
+{
+    INT count = 0;
+    for (const auto &obj : lazer_judgement::judged_objects()) {
+        if (hit_error_bar_candidate(obj)) ++count;
+    }
+    return count;
+}
+
+DLLFUN(INT) GetHitErrorMarkers(INT *times, INT *errors, INT *points, INT capacity)
+{
+    if (times == nullptr || errors == nullptr || points == nullptr || capacity <= 0) return 0;
+
+    INT count = 0;
+    for (const auto &obj : lazer_judgement::judged_objects()) {
+        if (!hit_error_bar_candidate(obj)) continue;
+        if (count >= capacity) break;
+
+        times[count] = obj.time;
+        errors[count] = obj.hit_error;
+        points[count] = lazer_judgement::aggregate_points(obj);
+        ++count;
+    }
+    return count;
+}
+
 DLLFUN(INT) NextMiss()
 {
-    return accuracy_analyzer::next_hitobject([](const hitobject_t &obj) { return obj.is_miss; });
+    return accuracy_analyzer::next_hitobject(
+        [](const lazer_judgement::JudgedObject &obj) { return lazer_judgement::is_miss_like(obj.result); });
 }
 
 DLLFUN(INT) Next50()
 {
-    const int w50 = beatmapengine::hitwindow50();
-    const int w100 = beatmapengine::hitwindow100();
-    const int w300 = beatmapengine::hitwindow300();
     return accuracy_analyzer::next_hitobject(
-        [=](const hitobject_t &obj) { return obj.get_points(w50, w100, w300) == 50; });
+        [](const lazer_judgement::JudgedObject &obj) { return lazer_judgement::aggregate_points(obj) == 50; });
 }
 
 DLLFUN(INT) Next100()
 {
-    const int w50 = beatmapengine::hitwindow50();
-    const int w100 = beatmapengine::hitwindow100();
-    const int w300 = beatmapengine::hitwindow300();
     return accuracy_analyzer::next_hitobject(
-        [=](const hitobject_t &obj) { return obj.get_points(w50, w100, w300) == 100; });
+        [](const lazer_judgement::JudgedObject &obj) { return lazer_judgement::aggregate_points(obj) == 100; });
 }
 
 DLLFUN(INT) Next300()
 {
-    const int w50 = beatmapengine::hitwindow50();
-    const int w100 = beatmapengine::hitwindow100();
-    const int w300 = beatmapengine::hitwindow300();
     return accuracy_analyzer::next_hitobject(
-        [=](const hitobject_t &obj) { return obj.get_points(w50, w100, w300) == 300; });
+        [](const lazer_judgement::JudgedObject &obj) { return lazer_judgement::aggregate_points(obj) == 300; });
 }
 
 DLLFUN(INT) NextHitObject()
 {
-    return accuracy_analyzer::next_hitobject([](const hitobject_t &obj) { return true; });
+    return accuracy_analyzer::next_hitobject([](const lazer_judgement::JudgedObject &) { return true; });
 }
 
 DLLFUN(BOOL) GetHitInfo(INT index, INT *kind, BOOL *is_miss, INT *hit_error, INT *points)
 {
-    if (index < 0 || index >= beatmapengine::hitobjects.size()) return FALSE;
-    const auto &obj = beatmapengine::hitobjects[index];
-    *kind = static_cast<int>(obj.hitobject_type);
-    *is_miss = obj.is_miss;
-    *hit_error = obj.hit_error;
-    const int w50 = beatmapengine::hitwindow50();
-    const int w100 = beatmapengine::hitwindow100();
-    const int w300 = beatmapengine::hitwindow300();
-    *points = obj.get_points(w50, w100, w300);
-    return TRUE;
+    bool miss = false;
+    const bool ok = lazer_judgement::get_judged_object_info(index, kind, &miss, hit_error, points);
+    *is_miss = miss;
+    return ok;
+}
+
+DLLFUN(BOOL) JudgementHasUnsupportedMods()
+{
+    return lazer_judgement::has_unsupported_mods();
+}
+
+DLLFUN(BOOL) AnalyzeAndApplyReplayMetadata()
+{
+    return lazer_judgement::apply_to_replay_metadata();
 }
 
 DLLFUN(void) SetTool(INT tool)
@@ -744,12 +985,19 @@ DLLFUN(void) SetBrushRadius(INT brush_radius)
     tool::brush_radius = static_cast<float>(brush_radius);
 }
 
+DLLFUN(void) SetEditorWindow(INT start_ms, INT end_ms)
+{
+    tool::SetEditorWindow(start_ms, end_ms);
+}
+
 DLLFUN(void) RelaxRecalculateAllHits()
 {
     relax::recalculate_all_hits();
+    lazer_judgement::mark_dirty();
 }
 
 DLLFUN(void) RelaxRecalculateHitsInSelection()
 {
     relax::recalculate_hits_in_selection();
+    lazer_judgement::mark_dirty();
 }

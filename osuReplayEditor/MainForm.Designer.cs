@@ -38,7 +38,6 @@ namespace osuReplayEditor
             this.editToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.undoToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.redoToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.quickLoadToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.configToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.githubToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.githubToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
@@ -146,7 +145,6 @@ namespace osuReplayEditor
             this.fileToolStripMenuItem,
             this.replayMetadataToolStripMenuItem,
             this.editToolStripMenuItem,
-            this.quickLoadToolStripMenuItem,
             this.configToolStripMenuItem,
             this.githubToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
@@ -169,7 +167,7 @@ namespace osuReplayEditor
             // 
             this.openToolStripMenuItem.Name = "openToolStripMenuItem";
             this.openToolStripMenuItem.Size = new System.Drawing.Size(144, 22);
-            this.openToolStripMenuItem.Text = "Open";
+            this.openToolStripMenuItem.Text = "Open .osr...";
             this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
             // 
             // saveToolStripMenuItem
@@ -177,14 +175,14 @@ namespace osuReplayEditor
             this.saveToolStripMenuItem.Enabled = false;
             this.saveToolStripMenuItem.Name = "saveToolStripMenuItem";
             this.saveToolStripMenuItem.Size = new System.Drawing.Size(144, 22);
-            this.saveToolStripMenuItem.Text = "Save";
+            this.saveToolStripMenuItem.Text = "Save...";
             this.saveToolStripMenuItem.Click += new System.EventHandler(this.saveToolStripMenuItem_Click);
             // 
             // exportAsosrToolStripMenuItem
             // 
             this.exportAsosrToolStripMenuItem.Name = "exportAsosrToolStripMenuItem";
             this.exportAsosrToolStripMenuItem.Size = new System.Drawing.Size(144, 22);
-            this.exportAsosrToolStripMenuItem.Text = "Export as .osr";
+            this.exportAsosrToolStripMenuItem.Text = "Export .osr...";
             this.exportAsosrToolStripMenuItem.Click += new System.EventHandler(this.exportAsosrToolStripMenuItem_Click);
             // 
             // replayMetadataToolStripMenuItem
@@ -216,13 +214,6 @@ namespace osuReplayEditor
             this.redoToolStripMenuItem.Size = new System.Drawing.Size(103, 22);
             this.redoToolStripMenuItem.Text = "Redo";
             this.redoToolStripMenuItem.Click += new System.EventHandler(this.redoToolStripMenuItem_Click);
-            // 
-            // quickLoadToolStripMenuItem
-            // 
-            this.quickLoadToolStripMenuItem.Name = "quickLoadToolStripMenuItem";
-            this.quickLoadToolStripMenuItem.Size = new System.Drawing.Size(79, 20);
-            this.quickLoadToolStripMenuItem.Text = "Quick Load";
-            this.quickLoadToolStripMenuItem.DropDownOpening += new System.EventHandler(this.quickLoadToolStripMenuItem_DropDownOpening);
             // 
             // configToolStripMenuItem
             // 
@@ -266,12 +257,16 @@ namespace osuReplayEditor
             // 
             this.volumeBar.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.volumeBar.Location = new System.Drawing.Point(1123, 52);
+            this.volumeBar.LargeChange = 5;
+            this.volumeBar.Maximum = 100;
             this.volumeBar.Name = "volumeBar";
             this.volumeBar.Orientation = System.Windows.Forms.Orientation.Vertical;
             this.volumeBar.Size = new System.Drawing.Size(45, 431);
+            this.volumeBar.SmallChange = 1;
             this.volumeBar.TabIndex = 2;
+            this.volumeBar.TickFrequency = 10;
             this.volumeBar.TickStyle = System.Windows.Forms.TickStyle.Both;
-            this.volumeBar.Value = 2;
+            this.volumeBar.Value = 20;
             this.volumeBar.ValueChanged += new System.EventHandler(this.volumeBar_ValueChanged);
             // 
             // volumeLabel
@@ -1164,7 +1159,7 @@ namespace osuReplayEditor
             | System.Windows.Forms.AnchorStyles.Right)));
             this.timelineControl.Location = new System.Drawing.Point(100, 438);
             this.timelineControl.Name = "timelineControl";
-            this.timelineControl.Size = new System.Drawing.Size(891, 23);
+            this.timelineControl.Size = new System.Drawing.Size(891, 45);
             this.timelineControl.TabIndex = 16;
             this.timelineControl.Text = "timelineControl";
             this.timelineControl.Value = 0D;
@@ -1416,7 +1411,6 @@ namespace osuReplayEditor
         private System.Windows.Forms.Label acc_300s_tb;
         private System.Windows.Forms.Button next50btn;
         private System.Windows.Forms.Button next100btn;
-        private System.Windows.Forms.ToolStripMenuItem quickLoadToolStripMenuItem;
         private System.Windows.Forms.Panel panel2;
         private System.Windows.Forms.RadioButton toolSelGrabRadioButton;
         private System.Windows.Forms.RadioButton toolBrushRadioButton;

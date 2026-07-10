@@ -13,6 +13,7 @@ namespace osuReplayEditor.ConfigEditor
         {
             Standalone = true;
             InitializeComponent();
+            ModernTheme.Apply(this);
         }
 
         private void ErrorMessage(string message)
@@ -29,11 +30,7 @@ namespace osuReplayEditor.ConfigEditor
         private void UpdateConfigFromForm()
         {
             osuDbPathTextBox.Text = osuDbPathTextBox.Text.Trim();
-            songFolderPathTextbox.Text = songFolderPathTextbox.Text.Trim();
-            replayFolderPathTextbox.Text = replayFolderPathTextbox.Text.Trim();
-            Config.mainConfig.OsuDbPath = (osuDbPathTextBox.Text.Length > 0) ? osuDbPathTextBox.Text : null;
-            Config.mainConfig.SongDirPath = (songFolderPathTextbox.Text.Length > 0) ? songFolderPathTextbox.Text : null;
-            Config.mainConfig.ReplayDirPath = (replayFolderPathTextbox.Text.Length > 0) ? replayFolderPathTextbox.Text : null;
+            Config.mainConfig.OsuApiKey = (osuDbPathTextBox.Text.Length > 0) ? osuDbPathTextBox.Text : null;
         }
 
         private void WriteConfigFile()
@@ -92,9 +89,7 @@ namespace osuReplayEditor.ConfigEditor
 
         private void ConfigEditorForm_Shown(object sender, EventArgs e)
         {
-            osuDbPathTextBox.Text = Config.mainConfig.OsuDbPath ?? "";
-            songFolderPathTextbox.Text = Config.mainConfig.SongDirPath ?? "";
-            replayFolderPathTextbox.Text = Config.mainConfig.ReplayDirPath ?? "";
+            osuDbPathTextBox.Text = Config.mainConfig.OsuApiKey ?? "";
         }
 
         private void selectOsuFolderBtn_Click(object sender, EventArgs e)
@@ -111,8 +106,6 @@ namespace osuReplayEditor.ConfigEditor
                 return false;
             osuDbPathTextBox.Text = maybeOsuDbPath;
             songFolderPathTextbox.Text = Path.Combine(path, "Songs");
-            string maybeReplayDirPath = Path.Combine(path, "Replays");
-            replayFolderPathTextbox.Text = Directory.Exists(maybeReplayDirPath) ? maybeReplayDirPath : "";
             return true;
         }
 

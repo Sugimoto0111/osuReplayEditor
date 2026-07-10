@@ -388,6 +388,45 @@ void slider_t::translate_offset(const glm::vec2 &offset)
     }
 }
 
+bool slider_t::position_at_progress(float progress, glm::vec2 &out_pos) const
+{
+    if (curve.empty()) return false;
+    if (progress <= 0.f) {
+        out_pos = curve.front().pos;
+        return true;
+    }
+    if (progress >= 1.f) {
+        out_pos = curve.back().pos;
+        return true;
+    }
+
+    float total_distance = 0.f;
+    for (size_t i = 1; i < curve.size(); ++i) {
+        total_distance += glm::distance(curve[i - 1].pos, curve[i].pos);
+    }
+    if (total_distance <= 0.f) {
+        out_pos = curve.front().pos;
+        return true;
+    }
+
+    const float target_distance = total_distance * progress;
+    float distance_so_far = 0.f;
+    for (size_t i = 1; i < curve.size(); ++i) {
+        const float segment_distance = glm::distance(curve[i - 1].pos, curve[i].pos);
+        if (segment_distance <= 0.f) continue;
+
+        if (distance_so_far + segment_distance >= target_distance) {
+            const float t = (target_distance - distance_so_far) / segment_distance;
+            out_pos = glm::mix(curve[i - 1].pos, curve[i].pos, t);
+            return true;
+        }
+        distance_so_far += segment_distance;
+    }
+
+    out_pos = curve.back().pos;
+    return true;
+}
+
 bool slider_t::ball_position_at_time(SongTime_t ms, SongTime_t start, SongTime_t end, glm::vec2 &out_pos) const
 {
     if (ms >= start && ms <= end) {

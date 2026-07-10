@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "config.hpp"
+#include "audioengine.hpp"
 #include "hitobject.hpp"
 #include "replayengine.hpp"
 
@@ -20,6 +21,13 @@ float beatmapengine::od;
 float beatmapengine::ar;
 float beatmapengine::slider_mult;
 float beatmapengine::slider_tick_rate;
+float beatmapengine::base_hp;
+float beatmapengine::base_cs;
+float beatmapengine::base_od;
+float beatmapengine::base_ar;
+float beatmapengine::base_slider_mult;
+float beatmapengine::base_slider_tick_rate;
+std::wstring beatmapengine::audio_path;
 SongTime_t beatmapengine::first_hitobject_ms;
 SongTime_t beatmapengine::last_hitobject_ms;
 bool beatmapengine::hitobjects_inverted;
@@ -33,6 +41,8 @@ struct timing_point_t {
     SongTime_t ms;
     float slider_velocity;
     float beat_length;
+    int sample_set;
+    float volume;
     bool operator<(const timing_point_t &rhs) const
     {
         return ms < rhs.ms;
@@ -41,6 +51,8 @@ struct timing_point_t {
 
 static std::vector<timing_point_t> timing_points;
 static hitobject_t *root_hitobject = nullptr;
+static SongTime_t last_hitsound_ms = 0;
+static bool hitsound_clock_valid = false;
 
 static bool timing_point_at(SongTime_t ms, timing_point_t &tp)
 {
@@ -76,6 +88,20 @@ float beatmapengine::beat_length_at(SongTime_t ms)
         return 1.f;
 }
 
+int beatmapengine::sample_set_at(SongTime_t ms)
+{
+    timing_point_t tp;
+    if (timing_point_at(ms, tp)) return tp.sample_set;
+    return 1;
+}
+
+float beatmapengine::sample_volume_at(SongTime_t ms)
+{
+    timing_point_t tp;
+    if (timing_point_at(ms, tp)) return tp.volume;
+    return 1.f;
+}
+
 static uint32_t djb_hash(std::string_view str)
 {
     uint32_t ret = 5381;
@@ -102,6 +128,20 @@ static void trim(std::string &s)
     rtrim(s);
 }
 
+static bool is_absolute_path(const std::wstring &path)
+{
+    if (path.size() >= 3 && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/')) return true;
+    if (path.size() >= 2 && path[0] == L'\\' && path[1] == L'\\') return true;
+    return false;
+}
+
+static std::wstring parent_path(const std::wstring &path)
+{
+    const size_t slash = path.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return L"";
+    return path.substr(0, slash + 1);
+}
+
 static const char *match_on(const std::string &line, const char *tag)
 {
     auto where = line.find(':');
@@ -118,6 +158,16 @@ static void match_float_full(const std::string &line, const char *tag, float *bu
     const char *rhs = match_on(line, tag);
     if (!rhs) return;
     if (sscanf_s(rhs, "%f", buf) != 1) fatal(".osr bad format");
+}
+
+static void match_wstring_full(const std::string &line, const char *tag, std::wstring *buf)
+{
+    const char *rhs = match_on(line, tag);
+    if (!rhs) return;
+
+    std::string value(rhs);
+    trim(value);
+    *buf = string_to_wstring(value);
 }
 
 static void update_stacking(int start_index, int end_index)
@@ -180,8 +230,8 @@ static void update_stacking(int start_index, int end_index)
                 hitobject_t *obj_n = &beatmapengine::hitobjects[n];
                 if (!obj_n->is_circle_or_slider()) continue;
                 if (obj_i->start - obj_n->start > stack_threshold) break;
-                // if (glm::distance(obj_n->slider->end_pos(), obj_i->pos) < STACK_LENIENCE) {
-                if (glm::distance(obj_n->pos, obj_i->pos) < STACK_LENIENCE) {
+                const glm::vec2 object_n_end_pos = obj_n->slider ? obj_n->slider->end_pos() : obj_n->pos;
+                if (glm::distance(object_n_end_pos, obj_i->pos) < STACK_LENIENCE) {
                     obj_n->stack_count = obj_i->stack_count + 1;
                     obj_i = obj_n;
                 }
@@ -216,7 +266,8 @@ static void add_slider_ticks()
                 not_fatal("Slider tick limit reached");
                 return;
             }
-            hitobjects.emplace_back(pos, t, hitobjects[i].start + hitobjects[i].slider->duration(),
+            hitobjects.emplace_back(pos, t,
+                                    hitobjects[i].start + static_cast<SongTime_t>(hitobjects[i].slider->duration()),
                                     HitObjectType::SliderTick);
             if (hitobjects.back().start > hitobjects.back().end) {
                 hitobjects.back().start = hitobjects.back().end;
@@ -322,6 +373,7 @@ static void match_int_full(const std::string &line, const char *tag, int *buf)
 
 #define match_float(tag, buf) (match_float_full(line, tag, buf))
 #define match_int(tag, buf) (match_int_full(line, tag, buf))
+#define match_wstring(tag, buf) (match_wstring_full(line, tag, buf))
 
 // hashes of various sections
 #define S_General 1196426939
@@ -336,14 +388,17 @@ static void match_int_full(const std::string &line, const char *tag, int *buf)
 bool beatmapengine::init(const std::wstring &fname)
 {
     timing_points.clear();
+    last_hitsound_ms = 0;
+    hitsound_clock_valid = false;
     for (auto obj : hitobjects) {
         obj.destroy();
     }
     root_hitobject = nullptr;
     hitobjects.clear();
     hitobjects_inverted = false;
+    audio_path.clear();
     if (fname.empty()) return true;
-    const std::wstring full_path = config::song_path + fname;
+    const std::wstring full_path = is_absolute_path(fname) ? fname : config::song_path + fname;
     std::ifstream r(full_path);
     if (!r.good()) {
         not_fatal("osu file couldn't be opened");
@@ -357,6 +412,8 @@ bool beatmapengine::init(const std::wstring &fname)
     last_tp.ms = 0;
     last_tp.beat_length = 1;
     last_tp.slider_velocity = 1;
+    last_tp.sample_set = 1;
+    last_tp.volume = 1.f;
     timing_points.clear();
     stack_leniency = 1.f;
     hp = 5.f;
@@ -365,10 +422,11 @@ bool beatmapengine::init(const std::wstring &fname)
     ar = 5.f;
     slider_mult = 1.4f;
     slider_tick_rate = 1.f;
+    std::wstring audio_filename;
     while (std::getline(r, line)) {
         if (line.length() < 2) continue;
         if (line.find("Unicode") != std::string::npos) continue;
-        if (std::find_if(line.begin(), line.end(), [](int ch) { return ch < ' ' || ch >= 128; }) != line.end()) {
+        if (std::find_if(line.begin(), line.end(), [](int ch) { return ch < ' '; }) != line.end()) {
             continue;
         }
         trim(line);
@@ -382,6 +440,7 @@ bool beatmapengine::init(const std::wstring &fname)
             case 0:
                 break;
             case S_General:
+                match_wstring("AudioFilename", &audio_filename);
                 match_float("StackLeniency", &stack_leniency);
                 break;
             case S_Editor:
@@ -405,6 +464,8 @@ bool beatmapengine::init(const std::wstring &fname)
                          &sample_index, &volume, &uninherited, &effects);
                 timing_point_t tp;
                 tp.ms = static_cast<SongTime_t>(std::ceil(ms_float));
+                tp.sample_set = sample_set > 0 ? sample_set : last_tp.sample_set;
+                tp.volume = volume > 0 ? static_cast<float>(volume) / 100.f : last_tp.volume;
                 if (beatlength > 0) {
                     const float velocity = 100.f / beatlength;
                     tp.slider_velocity = velocity;
@@ -429,6 +490,15 @@ bool beatmapengine::init(const std::wstring &fname)
                 break;
             }
         }
+    }
+    base_hp = hp;
+    base_cs = cs;
+    base_od = od;
+    base_ar = ar;
+    base_slider_mult = slider_mult;
+    base_slider_tick_rate = slider_tick_rate;
+    if (!audio_filename.empty()) {
+        audio_path = is_absolute_path(audio_filename) ? audio_filename : parent_path(full_path) + audio_filename;
     }
     std::stable_sort(timing_points.begin(), timing_points.end());
     std::stable_sort(hitobjects.begin(), hitobjects.end());
@@ -456,5 +526,37 @@ void beatmapengine::draw(SongTime_t ms)
     }
     for (int i = static_cast<int>(objs_to_draw.size()) - 1; i >= 0; --i) {
         objs_to_draw[i]->draw_fg(ms);
+    }
+}
+
+void beatmapengine::update_hitsounds(SongTime_t ms, bool is_playing)
+{
+    if (!is_playing) {
+        last_hitsound_ms = ms;
+        hitsound_clock_valid = true;
+        return;
+    }
+
+    if (!hitsound_clock_valid || ms < last_hitsound_ms || ms - last_hitsound_ms > 500) {
+        last_hitsound_ms = ms;
+        hitsound_clock_valid = true;
+        return;
+    }
+
+    const SongTime_t previous = last_hitsound_ms;
+    last_hitsound_ms = ms;
+    for (const auto &obj : hitobjects) {
+        if (obj.start <= previous) continue;
+        if (obj.start > ms) break;
+        switch (obj.hitobject_type) {
+            case HitObjectType::Circle:
+            case HitObjectType::Slider:
+            case HitObjectType::Spinner:
+                audioengine::play_hitsound(obj.hit_sound, sample_set_at(obj.start),
+                                           sample_volume_at(obj.start) * audioengine::handle->get_volume());
+                break;
+            default:
+                break;
+        }
     }
 }

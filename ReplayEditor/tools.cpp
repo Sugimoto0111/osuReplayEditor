@@ -4,9 +4,11 @@
 
 #include "tools.hpp"
 
+#include <algorithm>
 #include <vector>
 
 #include "audioengine.hpp"
+#include "lazer_judgement.hpp"
 #include "ui.hpp"
 
 namespace tool
@@ -60,10 +62,20 @@ class BrushTool : public Tool
 
    private:
     bool ApplyMutation(replayengine::Replay* replay);
+    void CaptureTargets(const replayengine::Replay& replay, const glm::vec2& mouse);
+    float EffectiveRadius() const;
+
+    struct BrushTarget
+    {
+        I64 index;
+        glm::vec2 original_position;
+        float weight;
+    };
 
     bool m_enabled = false;
-    glm::vec2 m_v0{0.f, 0.f};
-    glm::vec2 m_v1{0.f, 0.f};
+    glm::vec2 m_down_mouse{0.f, 0.f};
+    glm::vec2 m_current_mouse{0.f, 0.f};
+    std::vector<BrushTarget> m_targets;
 };
 
 SelectTool local_select_tool_container;
@@ -81,6 +93,8 @@ bool is_between(const float v, const float a, const float b)
 
 Tool* current_tool = &local_select_tool_container;
 float brush_radius = 60.f;
+I64 editor_window_start_ms = 0;
+I64 editor_window_end_ms = 0;
 
 ToolType CurrentToolType()
 {
@@ -176,7 +190,7 @@ void GrabTool::OnMouseUp(const glm::vec2& mouse)
 {
     m_enabled = false;
     m_v1 = mouse;
-    ApplyMutation(replayengine::MutableCurrentView());
+    if (ApplyMutation(replayengine::MutableCurrentView())) lazer_judgement::mark_dirty();
 }
 
 void GrabTool::OnMouseDown(const glm::vec2& mouse)
@@ -194,7 +208,18 @@ void GrabTool::OnMouseMove(const glm::vec2& mouse)
 {
     m_v1 = mouse;
     if (m_enabled) {
-        ApplyMutation(replayengine::MutableCurrentView());
+        if (ApplyMutation(replayengine::MutableCurrentView())) lazer_judgement::mark_dirty();
+    }
+}
+
+void SetEditorWindow(I64 start_ms, I64 end_ms)
+{
+    if (start_ms <= end_ms) {
+        editor_window_start_ms = start_ms;
+        editor_window_end_ms = end_ms;
+    } else {
+        editor_window_start_ms = end_ms;
+        editor_window_end_ms = start_ms;
     }
 }
 
@@ -258,39 +283,72 @@ void GrabTool::Draw()
 void BrushTool::OnMouseUp(const glm::vec2& mouse)
 {
     m_enabled = false;
-    m_v1 = mouse;
-    ApplyMutation(replayengine::MutableCurrentView());
+    m_current_mouse = mouse;
+    if (ApplyMutation(replayengine::MutableCurrentView())) lazer_judgement::mark_dirty();
+    m_targets.clear();
 }
 
 void BrushTool::OnMouseDown(const glm::vec2& mouse)
 {
     m_enabled = true;
-    m_v0 = mouse;
+    m_down_mouse = mouse;
+    m_current_mouse = mouse;
     replayengine::DuplicateCurrentView();
+    CaptureTargets(*replayengine::CurrentView(), mouse);
 }
 
 void BrushTool::OnMouseMove(const glm::vec2& mouse)
 {
-    m_v1 = mouse;
+    m_current_mouse = mouse;
     if (m_enabled) {
-        ApplyMutation(replayengine::MutableCurrentView());
+        if (ApplyMutation(replayengine::MutableCurrentView())) lazer_judgement::mark_dirty();
     }
 }
 
 bool BrushTool::ApplyMutation(replayengine::Replay* replay)
 {
-    if (!replay->are_in_out_marks_consistent()) {
+    if (replay == nullptr || m_targets.empty()) {
         return false;
     }
-    for (auto& frame : replay->mut_selection()) {
-        const float d = glm::distance(frame.p, m_v1);
-        if (d <= brush_radius) {
-            const float scale = 1.f - d / brush_radius;
-            frame.p += (m_v1 - m_v0) * scale;
+
+    const glm::vec2 delta = m_current_mouse - m_down_mouse;
+    bool changed = false;
+    auto& frames = replay->mut_frames();
+    for (const BrushTarget& target : m_targets) {
+        if (target.index < 0 || static_cast<size_t>(target.index) >= frames.size()) continue;
+        const glm::vec2 next_position = target.original_position + delta * target.weight;
+        if (glm::distance(frames[target.index].p, next_position) > 0.001f) {
+            frames[target.index].p = next_position;
+            changed = true;
         }
     }
-    m_v0 = m_v1;
-    return true;
+    return changed;
+}
+
+void BrushTool::CaptureTargets(const replayengine::Replay& replay, const glm::vec2& mouse)
+{
+    m_targets.clear();
+
+    const float radius = EffectiveRadius();
+    const auto& frames = replay.frames();
+    for (I64 i = 0; i < static_cast<I64>(frames.size()); ++i) {
+        const replayengine::ReplayFrame& frame = frames[i];
+        if (frame.ms < editor_window_start_ms || frame.ms > editor_window_end_ms) continue;
+
+        const float d = glm::distance(frame.p, mouse);
+        if (d > radius) continue;
+
+        BrushTarget target;
+        target.index = i;
+        target.original_position = frame.p;
+        target.weight = 1.f - d / radius;
+        m_targets.push_back(target);
+    }
+}
+
+float BrushTool::EffectiveRadius() const
+{
+    return std::max(1.f, brush_radius * 0.5f);
 }
 
 void BrushTool::Draw()
@@ -300,9 +358,10 @@ void BrushTool::Draw()
     glBegin(GL_LINE_LOOP);
     glColorBlue();
     constexpr float two_pi = 6.28318f;
+    const float radius = EffectiveRadius();
     for (int i = 0; i < N; ++i) {
         const float angle = RATIO(i, N) * two_pi;
-        glVertex2f(m_v1.x + glm::cos(angle) * brush_radius, m_v1.y + glm::sin(angle) * brush_radius);
+        glVertex2f(m_current_mouse.x + glm::cos(angle) * radius, m_current_mouse.y + glm::sin(angle) * radius);
     }
     glEnd();
     glEnable(GL_TEXTURE_2D);

@@ -34,6 +34,7 @@ class slider_t
     static slider_t *from_def(const char *def, glm::vec2 pos, SongTime_t start, SongTime_t end);
     void draw(SongTime_t ms, SongTime_t start, SongTime_t end, float opacity);
     void translate_offset(const glm::vec2 &offset);
+    bool position_at_progress(float progress, glm::vec2 &out_pos) const;
     bool ball_position_at_time(SongTime_t ms, SongTime_t start, SongTime_t end, glm::vec2 &out_pos) const;
     bool position_at_time(SongTime_t ms, SongTime_t start, SongTime_t end, glm::vec2 &out_pos) const;
 };

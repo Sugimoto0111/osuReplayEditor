@@ -75,18 +75,28 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <BassBinaryDir>$(ProjectDir)thirdparty\bass24\lib-win32\</BassBinaryDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
+    <BassBinaryDir>$(ProjectDir)thirdparty\bass24\lib-x64\</BassBinaryDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <BassBinaryDir>$(ProjectDir)thirdparty\bass24\lib-win32\</BassBinaryDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
+    <BassBinaryDir>$(ProjectDir)thirdparty\bass24\lib-x64\</BassBinaryDir>
   </PropertyGroup>
+  <ItemDefinitionGroup>
+    <PostBuildEvent>
+      <Command>copy /Y "$(BassBinaryDir)bass.dll" "$(OutDir)"
+copy /Y "$(BassBinaryDir)bass_fx.dll" "$(OutDir)"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -100,7 +110,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Opengl32.lib;$(ProjectDir)thirdparty\bass24\bass.lib;$(ProjectDir)thirdparty\bass24\bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opengl32.lib;$(BassBinaryDir)bass.lib;$(BassBinaryDir)bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
   </ItemDefinitionGroup>
@@ -118,7 +128,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Opengl32.lib;$(ProjectDir)thirdparty\bass24\bass.lib;$(ProjectDir)thirdparty\bass24\bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opengl32.lib;$(BassBinaryDir)bass.lib;$(BassBinaryDir)bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
   </ItemDefinitionGroup>
@@ -130,7 +140,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;REPLAYEDITOR_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;REPLAYEDITOR_EXPORTS;_WINDOWS;_USRDLL;BUILD_LABEL="$(BuildLabel)";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
@@ -139,7 +149,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>Opengl32.lib;$(ProjectDir)thirdparty\bass24\bass.lib;$(ProjectDir)thirdparty\bass24\bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opengl32.lib;$(BassBinaryDir)bass.lib;$(BassBinaryDir)bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
   </ItemDefinitionGroup>
@@ -161,7 +171,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>Opengl32.lib;$(ProjectDir)thirdparty\bass24\bass.lib;$(ProjectDir)thirdparty\bass24\bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Opengl32.lib;$(BassBinaryDir)bass.lib;$(BassBinaryDir)bass_fx.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
   </ItemDefinitionGroup>
@@ -175,6 +185,7 @@
     <ClInclude Include="crypto.hpp" />
     <ClInclude Include="history_stack.hpp" />
     <ClInclude Include="hitobject.hpp" />
+    <ClInclude Include="lazer_judgement.hpp" />
     <ClInclude Include="osudb.hpp" />
     <ClInclude Include="relax.hpp" />
     <ClInclude Include="replayengine.hpp" />
@@ -196,6 +207,7 @@
     <ClCompile Include="config_API.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="hitobject.cpp" />
+    <ClCompile Include="lazer_judgement.cpp" />
     <ClCompile Include="osudb.cpp" />
     <ClCompile Include="API.cpp" />
     <ClCompile Include="relax.cpp" />

@@ -66,7 +66,9 @@ namespace Builder
 #endif
             string[] moveToDistro = {
                 "osuReplayEditor.exe",
-                "ReplayEditor.dll"
+                "ReplayEditor.dll",
+                "bass.dll",
+                "bass_fx.dll"
             };
             foreach (var fname in moveToDistro)
             {

@@ -40,6 +40,7 @@ class hitobject_t
     SongTime_t start, end;
     HitObjectType hitobject_type;
     slider_t* slider;
+    int hit_sound;
     bool is_miss;
     int hit_error;
     int stack_count;

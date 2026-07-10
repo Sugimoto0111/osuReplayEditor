@@ -31,6 +31,7 @@ class Tool
 
 ToolType CurrentToolType();
 void CurrentToolType(ToolType new_tool);
+void SetEditorWindow(I64 start_ms, I64 end_ms);
 extern Tool *current_tool;
 extern float brush_radius;
 

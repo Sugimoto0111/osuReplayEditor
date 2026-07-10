@@ -29,6 +29,7 @@ namespace textures
 {
 
 extern texture_t *hitcircle;
+extern texture_t *hitcircleoverlay;
 extern texture_t *approachcircle;
 extern texture_t *cursor;
 // extern texture_t *slider_body;
@@ -38,6 +39,7 @@ extern texture_t *vertex;
 extern texture_t *markerA;
 extern texture_t *markerB;
 extern texture_t *slidertick;
+void set_skin_directory(const std::wstring &path);
 bool init();
 
 }  // namespace textures

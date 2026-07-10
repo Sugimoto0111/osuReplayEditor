@@ -5,7 +5,7 @@
 
 #include <functional>
 
-#include "hitobject.hpp"
+#include "lazer_judgement.hpp"
 
 namespace accuracy_analyzer
 {
@@ -22,6 +22,6 @@ struct Stats {
 };
 
 void analyze(Stats* stats, bool do_trace);
-int next_hitobject(std::function<bool(const hitobject_t&)> func);
+int next_hitobject(std::function<bool(const lazer_judgement::JudgedObject&)> func);
 
 }  // namespace accuracy_analyzer
