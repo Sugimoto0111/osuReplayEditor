@@ -1461,25 +1461,33 @@ namespace osuReplayEditor
             setHitObjectInfo(index, kind, isMiss, hitError, points);
             return true;
         }
+        private bool NavigateToJudgement(int index)
+        {
+            if (!setHitObjectInfoIndex(index))
+                return false;
+
+            SetEditorCenter(API.GetTime(), false);
+            return true;
+        }
         private void nextMissBtn_Click(object sender, EventArgs e)
         {
-            if (!setHitObjectInfoIndex(API.NextMiss()))
+            if (!NavigateToJudgement(API.NextMiss()))
                 MessageBox.Show("No more misses");
         }
         private void next50btn_Click(object sender, EventArgs e)
         {
-            if (!setHitObjectInfoIndex(API.Next50()))
+            if (!NavigateToJudgement(API.Next50()))
                 MessageBox.Show("No more 50s");
         }
         private void next100btn_Click(object sender, EventArgs e)
         {
-            if (!setHitObjectInfoIndex(API.Next100()))
+            if (!NavigateToJudgement(API.Next100()))
                 MessageBox.Show("No more 100s");
         }
 
         private void nextObjectBtn_Click(object sender, EventArgs e)
         {
-            if (!setHitObjectInfoIndex(API.NextHitObject()))
+            if (!NavigateToJudgement(API.NextHitObject()))
                 MessageBox.Show("No more hit objects");
         }
 
