@@ -263,12 +263,6 @@ namespace osuReplayEditor
             if (lane.Width <= 0 || lane.Height <= 0) return;
 
             FillRoundedRectangle(g, laneBrush, lane, ZoneRadius);
-
-            Rectangle clip = new Rectangle(lane.Left, lane.Top + KeyInputTopOffset, lane.Width, KeyInputHeight);
-            foreach (Rectangle segment in KeySegments(mask, clip))
-            {
-                FillRoundedRectangle(g, activeBrush, segment, KeyInputRadius);
-            }
         }
 
         private void DrawHitObjects(Graphics g)
