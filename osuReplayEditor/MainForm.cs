@@ -159,9 +159,11 @@ namespace osuReplayEditor
             this.songTimeLabelLabel.Visible = false;
             this.songTimeLabel.Location = new Point(contentLeft, hitErrorTop + 29);
 
+            int timelineRight = this.ClientSize.Width - margin;
+            int timelineWidth = Math.Max(1, timelineRight - contentLeft);
             this.timelineControl.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
             this.timelineControl.Location = new Point(contentLeft, bottomTimelineTop);
-            this.timelineControl.Size = new Size(contentWidth, bottomTimelineHeight);
+            this.timelineControl.Size = new Size(timelineWidth, bottomTimelineHeight);
             this.timelineControl.TimelineEndMs = this.songMax;
             this.timelineControl.ViewDurationMs = editorWindowDurationMs;
 

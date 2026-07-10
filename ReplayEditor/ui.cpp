@@ -89,6 +89,22 @@ static void quad_vertex(const glm::vec2 &p, const glm::vec2 &d)
     glVertex2f(p.x, p.y + d.y);
 }
 
+static void set_trail_color(const replayengine::ReplayFrame &frame)
+{
+    const bool key1 = frame.pressed_key1();
+    const bool key2 = frame.pressed_key2();
+
+    if (key1 && key2) {
+        glColor3f(80.0f / 255.0f, 220.0f / 255.0f, 120.0f / 255.0f);
+    } else if (key1) {
+        glColor3f(187.0f / 255.0f, 107.0f / 255.0f, 217.0f / 255.0f);
+    } else if (key2) {
+        glColor3f(242.0f / 255.0f, 153.0f / 255.0f, 74.0f / 255.0f);
+    } else {
+        glColorRed();
+    }
+}
+
 static void draw_frames(const SongTime_t ms)
 {
     using namespace replayengine;
@@ -99,23 +115,15 @@ static void draw_frames(const SongTime_t ms)
     if (start == frames.end()) return;
     if (end != frames.end()) ++end;
     glDisable(GL_TEXTURE_2D);
-    glBegin(GL_LINE_STRIP);
-    glColorRed();
-    bool is_color_red = true;
-    for (auto iter = start; iter != end; ++iter) {
-        const I64 index = iter - replayengine::CurrentView()->frames().begin();
-        if (index >= CurrentView()->mark_in() && index <= CurrentView()->mark_out()) {
-            if (is_color_red) {
-                glColor3f(0.4f, 0.f, 1.f);
-                is_color_red = false;
-            }
-        } else {
-            if (!is_color_red) {
-                glColorRed();
-                is_color_red = true;
-            }
-        }
-        glVertex2f(iter->p.x, iter->p.y);
+    glBegin(GL_LINES);
+    for (auto curr = start; curr != end; ++curr) {
+        auto next = curr;
+        ++next;
+        if (next == end) break;
+
+        set_trail_color(*curr);
+        glVertex2f(curr->p.x, curr->p.y);
+        glVertex2f(next->p.x, next->p.y);
     }
     glEnd();
     glEnable(GL_TEXTURE_2D);
@@ -151,79 +159,6 @@ static void draw_frames(const SongTime_t ms)
                 continue;
             textures::vertex->draw(curr->p, vertex_size * 0.5f, vertex_size);
         }
-    }
-    {
-        constexpr float bar_top_y = -0.95f;
-        constexpr float bar_height = 0.05f;
-        glMatrixMode(GL_PROJECTION);
-        glPushMatrix();
-        glLoadIdentity();
-        glDisable(GL_TEXTURE_2D);
-        glBegin(GL_QUADS);
-        bool is_drawing_m1 = false;
-        bool is_drawing_m2 = false;
-        float m1_pos = -1.f;
-        float m2_pos = -1.f;
-        for (auto curr = start; curr != end; ++curr) {
-            const float xpos = 2.f * RATIO(curr->ms - ms, ui::trail_length) + 1.f;
-            if (curr->pressed_mouse1()) {
-                if (!is_drawing_m1) {
-                    m1_pos = xpos;
-                    is_drawing_m1 = true;
-                }
-            } else {
-                if (is_drawing_m1) {
-                    glColorCyan();
-                    quad_vertex(glm::vec2(m1_pos, bar_top_y), glm::vec2(xpos - m1_pos, bar_height));
-                    is_drawing_m1 = false;
-                }
-            }
-            if (curr->pressed_mouse2()) {
-                if (!is_drawing_m2) {
-                    m2_pos = xpos;
-                    is_drawing_m2 = true;
-                }
-            } else {
-                if (is_drawing_m2) {
-                    glColorMagenta();
-                    quad_vertex(glm::vec2(m2_pos, bar_top_y - bar_height), glm::vec2(xpos - m2_pos, bar_height));
-                    is_drawing_m2 = false;
-                }
-            }
-            if (is_drawing_m1) {
-                glColorCyan();
-                quad_vertex(glm::vec2(m1_pos, bar_top_y), glm::vec2(xpos - m1_pos, bar_height));
-            }
-            if (is_drawing_m2) {
-                glColorMagenta();
-                quad_vertex(glm::vec2(m2_pos, bar_top_y - bar_height), glm::vec2(xpos - m2_pos, bar_height));
-            }
-        }
-        glEnd();
-        glBegin(GL_LINES);
-        bool prev_mouse1 = false;
-        bool prev_mouse2 = false;
-        for (auto curr = start; curr != end; ++curr) {
-            const bool is_press = IS_PRESSED(prev_mouse1, prev_mouse2, curr->pressed_mouse1(), curr->pressed_mouse2());
-            const bool is_release =
-                IS_RELEASE(prev_mouse1, prev_mouse2, curr->pressed_mouse1(), curr->pressed_mouse2());
-            prev_mouse1 = curr->pressed_mouse1();
-            prev_mouse2 = curr->pressed_mouse2();
-            if (!is_press && !is_release) {
-                continue;
-            }
-            const float xpos = 2.f * RATIO(curr->ms - ms, ui::trail_length) + 1.f;
-            if (is_press) {
-                glColorYellow();
-            } else {
-                glColorGray();
-            }
-            glVertex2f(xpos, bar_top_y - bar_height);
-            glVertex2f(xpos, bar_top_y + bar_height);
-        }
-        glEnd();
-        glEnable(GL_TEXTURE_2D);
-        glPopMatrix();
     }
 }
 

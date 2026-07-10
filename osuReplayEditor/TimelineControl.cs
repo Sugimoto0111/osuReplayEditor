@@ -10,7 +10,7 @@ namespace osuReplayEditor
     {
         private const int Key1Mask = 5;
         private const int Key2Mask = 10;
-        private const int TimelineInset = 40;
+        private const int TimelineInset = 16;
         private const int LowerTimelineHeight = 172;
         private const int Key1ZoneY = 30;
         private const int Key2ZoneY = 105;
@@ -263,6 +263,17 @@ namespace osuReplayEditor
             if (lane.Width <= 0 || lane.Height <= 0) return;
 
             FillRoundedRectangle(g, laneBrush, lane, ZoneRadius);
+
+            Rectangle clip = new Rectangle(
+                lane.Left,
+                lane.Top + KeyInputTopOffset,
+                lane.Width,
+                KeyInputHeight);
+
+            foreach (Rectangle segment in KeySegments(mask, clip))
+            {
+                FillRoundedRectangle(g, activeBrush, segment, KeyInputRadius);
+            }
         }
 
         private void DrawHitObjects(Graphics g)
